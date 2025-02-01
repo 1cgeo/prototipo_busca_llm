@@ -1,5 +1,7 @@
-import pino from 'pino';
+import { pino } from 'pino';
+import { type Logger } from 'pino';
 
+// Criamos o transport como antes
 const transports = pino.transport({
   targets: [
     {
@@ -9,16 +11,20 @@ const transports = pino.transport({
         translateTime: 'SYS:standard',
         ignore: 'pid,hostname',
       },
-      level: 'debug'
+      level: 'debug',
     },
     {
       target: 'pino/file',
       options: { destination: './logs/app.log' },
-      level: 'info'
-    }
-  ]
+      level: 'info',
+    },
+  ],
 });
 
-export const logger = pino({
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug'
-}, transports);
+// Declaramos explicitamente o tipo Logger
+export const logger: Logger = pino(
+  {
+    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  },
+  transports,
+);

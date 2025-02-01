@@ -1,80 +1,131 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import {
+  SCALES,
+  PRODUCT_TYPES,
+  SUPPLY_AREAS,
+  PROJECTS,
+  SORT_FIELDS,
+  SORT_DIRECTIONS,
+} from '../types/api.js';
 
-const NaturalLanguageSchema = z.object({
-  query: z.string()
-    .min(3, 'A consulta deve ter pelo menos 3 caracteres')
-    .max(500, 'A consulta deve ter no máximo 500 caracteres')
-});
-
-const StructuredSearchSchema = z.object({
-  filtros: z.object({
-    palavraChave: z.string().optional(),
-    escala: z.enum(['1:25.000', '1:50.000', '1:100.000', '1:250.000']).optional(),
-    tipoProduto: z.enum(['Carta Topografica', 'Carta Ortoimagem', 'Carta Tematica']).optional(),
-    estado: z.string().optional(),
-    municipio: z.string().optional(),
-    areaSuprimento: z.string().optional(),
-    projeto: z.string().optional(),
-    periodoPublicacao: z.object({
-      inicio: z.string(),
-      fim: z.string()
-    }).optional(),
-    periodoCriacao: z.object({
-      inicio: z.string(),
-      fim: z.string()
-    }).optional(),
-    bbox: z.object({
-      norte: z.number(),
-      sul: z.number(),
-      leste: z.number(),
-      oeste: z.number()
-    }).optional()
-  }),
-  ordenacao: z.object({
-    campo: z.enum(['dataPublicacao', 'dataCriacao']),
-    direcao: z.enum(['ASC', 'DESC'])
-  }),
-  paginacao: z.object({
-    pagina: z.number().min(1),
-    limite: z.number().min(1).max(100)
+// Base reusable schemas
+export const DateRangeSchema = z
+  .object({
+    start: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    end: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
   })
+  .refine(
+    data => {
+      const start = new Date(data.start);
+      const end = new Date(data.end);
+      return start <= end;
+    },
+    {
+      message: 'Start date must be less than or equal to end date',
+    },
+  );
+
+export const BBoxSchema = z
+  .object({
+    north: z.number().min(-90).max(90),
+    south: z.number().min(-90).max(90),
+    east: z.number().min(-180).max(180),
+    west: z.number().min(-180).max(180),
+  })
+  .refine(
+    data => {
+      return data.north > data.south && data.east > data.west;
+    },
+    {
+      message:
+        'Invalid coordinates: north must be greater than south and east must be greater than west',
+    },
+  );
+
+// Main search parameters schema
+export const SearchParamsSchema = z.object({
+  keyword: z.string().optional(),
+  scale: z.enum([...SCALES]).optional(),
+  productType: z.enum([...PRODUCT_TYPES]).optional(),
+  state: z.string().optional(),
+  city: z.string().optional(),
+  supplyArea: z.enum([...SUPPLY_AREAS]).optional(),
+  project: z.enum([...PROJECTS]).optional(),
+  publicationPeriod: DateRangeSchema.optional(),
+  creationPeriod: DateRangeSchema.optional(),
+  sortField: z.enum([...SORT_FIELDS]).default('publicationDate'),
+  sortDirection: z.enum([...SORT_DIRECTIONS]).default('DESC'),
+  limit: z.number().min(1).max(100).optional(),
 });
 
+// Pagination schema
+export const PaginationSchema = z
+  .object({
+    page: z.number().min(1, 'Page must be greater than 0'),
+    limit: z.number().min(1).max(100, 'Limit must be between 1 and 100'),
+  })
+  .default({
+    page: 1,
+    limit: 10,
+  });
+
+// Natural language query schema
+export const NaturalLanguageSchema = z.object({
+  query: z
+    .string()
+    .min(10, 'Query must be at least 10 characters long')
+    .max(500, 'Query must not exceed 500 characters'),
+});
+
+// Full search request schema
+export const FullSearchRequestSchema = z.object({
+  searchParams: SearchParamsSchema,
+  bbox: BBoxSchema.optional(),
+  pagination: PaginationSchema,
+});
+
+// Validation middlewares
 export const validateNaturalLanguageQuery = (
   req: Request,
   res: Response,
-  next: NextFunction
-) => {
+  next: NextFunction,
+): void => {
   try {
     NaturalLanguageSchema.parse(req.body);
     next();
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Erro de validação',
-        details: error.errors 
+      res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
       });
+      return;
     }
-    res.status(400).json({ error: 'Requisição inválida' });
+    res.status(400).json({ error: 'Invalid request' });
   }
 };
 
-export const validateStructuredSearch = (
+export const validateFullSearchRequest = (
   req: Request,
   res: Response,
-  next: NextFunction
-) => {
+  next: NextFunction,
+): void => {
   try {
-    StructuredSearchSchema.parse(req.body);
+    FullSearchRequestSchema.parse(req.body);
     next();
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ 
-        error: 'Erro de validação',
-        details: error.errors 
+      res.status(400).json({
+        error: 'Validation error',
+        details: error.errors,
       });
+      return;
     }
-    res.status(400).json({ error: 'Requisição inválida' });
+    res.status(400).json({ error: 'Invalid request' });
   }
 };

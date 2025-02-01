@@ -2,7 +2,7 @@ export interface SearchResult {
     nome: string;
     descricao: string;
     escala: '1:25.000' | '1:50.000' | '1:100.000' | '1:250.000';
-    tipoProduto: 'Carta Topografica' | 'Carta Ortoimagem' | 'Carta Tematica';
+    tipoProduto: 'Carta Topográfica' | 'Carta Ortoimagem' | 'Carta Temática';
     projeto: string;
     dataPublicacao: string;
     dataCriacao: string;
@@ -12,7 +12,7 @@ export interface SearchResult {
   export interface SearchFilters {
     palavraChave?: string;
     escala?: '1:25.000' | '1:50.000' | '1:100.000' | '1:250.000';
-    tipoProduto?: 'Carta Topografica' | 'Carta Ortoimagem' | 'Carta Tematica';
+    tipoProduto?: 'Carta Topográfica' | 'Carta Ortoimagem' | 'Carta Temática';
     estado?: string;
     municipio?: string;
     areaSuprimento?: string;

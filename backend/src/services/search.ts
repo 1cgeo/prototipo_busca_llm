@@ -1,266 +1,199 @@
-import { SearchResult, PaginatedResponse } from '@/types/api';
-import { ParsedQuery } from './llm';
-import { db } from './database';
-import { logger } from '@/utils/logger';
+import { db } from '../db/connection.js';
+import { logger } from '../utils/logger.js';
+import {
+  QueryResult,
+  SearchParams,
+  PaginationParams,
+  BoundingBox,
+} from '../types/api.js';
 
 export class SearchService {
-  async search(parsedQuery: ParsedQuery): Promise<PaginatedResponse<SearchResult>> {
+  async search({
+    searchParams,
+    bbox,
+    pagination,
+  }: {
+    searchParams: SearchParams;
+    bbox?: BoundingBox;
+    pagination: PaginationParams;
+  }): Promise<QueryResult> {
     try {
-      const conditions = [];
-      const params = [];
+      const conditions: string[] = [];
+      const params: any[] = [];
       let paramCount = 1;
 
-      if (parsedQuery.palavraChave) {
-        conditions.push(`to_tsvector('portuguese', nome || ' ' || descricao) @@ plainto_tsquery('portuguese', ${paramCount})`);
-        params.push(parsedQuery.palavraChave);
+      // Keyword search using enhanced text search
+      if (searchParams.keyword) {
+        conditions.push(
+          `texto_busca @@ websearch_to_tsquery('portuguese', $${paramCount})`,
+        );
+        params.push(searchParams.keyword);
         paramCount++;
       }
 
-      if (parsedQuery.escala) {
-        conditions.push(`escala = ${paramCount}`);
-        params.push(parsedQuery.escala);
+      // Exact filters
+      if (searchParams.scale) {
+        conditions.push(`escala = $${paramCount}`);
+        params.push(searchParams.scale);
         paramCount++;
       }
 
-      if (parsedQuery.tipoProduto) {
-        conditions.push(`tipo_produto = ${paramCount}`);
-        params.push(parsedQuery.tipoProduto);
+      if (searchParams.productType) {
+        conditions.push(`tipo_produto = $${paramCount}`);
+        params.push(searchParams.productType);
         paramCount++;
       }
 
-      if (parsedQuery.projeto) {
-        conditions.push(`projeto = ${paramCount}`);
-        params.push(parsedQuery.projeto);
+      if (searchParams.project) {
+        conditions.push(`projeto = $${paramCount}`);
+        params.push(searchParams.project);
         paramCount++;
       }
 
-      if (parsedQuery.periodoPublicacao) {
-        conditions.push(`data_publicacao BETWEEN ${paramCount} AND ${paramCount + 1}`);
-        params.push(parsedQuery.periodoPublicacao.inicio, parsedQuery.periodoPublicacao.fim);
+      // Date period filters with date normalization
+      if (searchParams.publicationPeriod) {
+        conditions.push(
+          `date_trunc('day', data_publicacao) BETWEEN 
+           date_trunc('day', $${paramCount}::timestamp) AND 
+           date_trunc('day', $${paramCount + 1}::timestamp)`,
+        );
+        params.push(
+          searchParams.publicationPeriod.start,
+          searchParams.publicationPeriod.end,
+        );
         paramCount += 2;
       }
 
-      if (parsedQuery.periodoCriacao) {
-        conditions.push(`data_criacao BETWEEN ${paramCount} AND ${paramCount + 1}`);
-        params.push(parsedQuery.periodoCriacao.inicio, parsedQuery.periodoCriacao.fim);
+      if (searchParams.creationPeriod) {
+        conditions.push(
+          `date_trunc('day', data_criacao) BETWEEN 
+           date_trunc('day', $${paramCount}::timestamp) AND 
+           date_trunc('day', $${paramCount + 1}::timestamp)`,
+        );
+        params.push(
+          searchParams.creationPeriod.start,
+          searchParams.creationPeriod.end,
+        );
         paramCount += 2;
       }
 
-      if (parsedQuery.bbox) {
-        conditions.push(`ST_Intersects(
-          geometry, 
-          ST_MakeEnvelope(${paramCount}, ${paramCount + 1}, ${paramCount + 2}, ${paramCount + 3}, 4326)
-        )`);
-        params.push(parsedQuery.bbox.oeste, parsedQuery.bbox.sul, parsedQuery.bbox.leste, parsedQuery.bbox.norte);
+      // Spatial filters using PostGIS
+      if (bbox) {
+        conditions.push(
+          `ST_Intersects(
+            geometry, 
+            ST_MakeEnvelope($${paramCount}, $${paramCount + 1}, $${paramCount + 2}, $${paramCount + 3}, 4326)
+          )`,
+        );
+        params.push(bbox.west, bbox.south, bbox.east, bbox.north);
         paramCount += 4;
       }
 
-      if (parsedQuery.municipio) {
+      // City intersection using normalized search
+      if (searchParams.city) {
         conditions.push(`EXISTS (
           SELECT 1 FROM municipios m 
-          WHERE m.nome = ${paramCount} 
+          WHERE unaccent(lower(m.nome)) ILIKE unaccent(lower($${paramCount}))
           AND ST_Intersects(datasets.geometry, m.geometry)
         )`);
-        params.push(parsedQuery.municipio);
+        params.push(`%${searchParams.city}%`);
         paramCount++;
       }
 
-      if (parsedQuery.estado) {
+      // State intersection using normalized search
+      if (searchParams.state) {
         conditions.push(`EXISTS (
           SELECT 1 FROM estados e 
-          WHERE e.nome = ${paramCount} 
+          WHERE unaccent(lower(e.nome)) ILIKE unaccent(lower($${paramCount}))
           AND ST_Intersects(datasets.geometry, e.geometry)
         )`);
-        params.push(parsedQuery.estado);
+        params.push(`%${searchParams.state}%`);
         paramCount++;
       }
 
-      if (parsedQuery.areaSuprimento) {
+      // Supply area intersection
+      if (searchParams.supplyArea) {
         conditions.push(`EXISTS (
           SELECT 1 FROM areas_suprimento a 
-          WHERE a.nome = ${paramCount} 
+          WHERE a.nome = $${paramCount}
           AND ST_Intersects(datasets.geometry, a.geometry)
         )`);
-        params.push(parsedQuery.areaSuprimento);
+        params.push(searchParams.supplyArea);
         paramCount++;
       }
 
-      const whereClause = conditions.length > 0 
-        ? 'WHERE ' + conditions.join(' AND ')
-        : '';
+      const whereClause =
+        conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-      // Calcular total de resultados
+      // Sorting
+      const orderField =
+        searchParams.sortField === 'creationDate'
+          ? 'data_criacao'
+          : 'data_publicacao';
+      const orderClause = `ORDER BY ${orderField} ${searchParams.sortDirection}`;
+
+      // Pagination
+      const offset = (pagination.page - 1) * pagination.limit;
+      const limitClause = `LIMIT ${pagination.limit} OFFSET ${offset}`;
+
+      // Count query
       const countQuery = `
-        SELECT COUNT(*) 
-        FROM datasets 
+        SELECT COUNT(*)::integer as total
+        FROM datasets
         ${whereClause}
       `;
-      
-      const totalCount = parseInt((await db.one(countQuery, params)).count);
-      
-      // Configurar paginação e ordenação
-      const { limite, pagina } = parsedQuery.paginacao;
-      const offset = (pagina - 1) * limite;
-      
-      const orderClause = parsedQuery.ordenacao 
-        ? `ORDER BY ${parsedQuery.ordenacao.campo === 'dataPublicacao' ? 'data_publicacao' : 'data_criacao'} ${parsedQuery.ordenacao.direcao}`
-        : 'ORDER BY data_publicacao DESC';
 
-      // Query principal com paginação
-      const sql = `
+      // Main query
+      const mainQuery = `
         SELECT 
-          nome,
-          descricao,
-          escala,
-          tipo_produto as "tipoProduto",
-          projeto,
-          data_publicacao as "dataPublicacao",
-          data_criacao as "dataCriacao",
+          nome as name,
+          descricao as description,
+          escala as scale,
+          tipo_produto as "productType",
+          projeto as project,
+          data_publicacao as "publicationDate",
+          data_criacao as "creationDate",
           ST_AsGeoJSON(geometry)::json as geometry
         FROM datasets
         ${whereClause}
         ${orderClause}
-        LIMIT ${limite}
-        OFFSET ${offset}
+        ${limitClause}
       `;
 
-      logger.debug('Executing search query:', { sql, params, limite, pagina });
+      // Execute queries in parallel
+      const [total, items] = await Promise.all([
+        db.one(countQuery, params),
+        db.any(mainQuery, params),
+      ]);
 
-      const results = await db.any(sql, params);
+      logger.debug(
+        {
+          searchParams,
+          pagination,
+          total: total.total,
+          resultCount: items.length,
+          conditions,
+          params,
+        },
+        'Search executed successfully',
+      );
 
-      logger.info(`Found ${results.length} results (total: ${totalCount})`);
-      
       return {
-        items: results,
+        items,
         metadata: {
-          total: totalCount,
-          pagina: pagina,
-          limite: limite,
-          totalPaginas: Math.ceil(totalCount / limite)
-        }
+          total: total.total,
+          page: pagination.page,
+          limit: pagination.limit,
+          totalPages: Math.ceil(total.total / pagination.limit),
+          appliedParams: searchParams,
+        },
       };
     } catch (error) {
-      logger.error('Search error:', error);
-      throw error;
-    }
-  }
-} } from '@/types/api';
-import { ParsedQuery } from './llm';
-import { db } from './database';
-import { logger } from '@/utils/logger';
-
-export class SearchService {
-  async search(parsedQuery: ParsedQuery): Promise<SearchResult[]> {
-    try {
-      const conditions = [];
-      const params = [];
-      let paramCount = 1;
-
-      if (parsedQuery.palavraChave) {
-        conditions.push(`to_tsvector('portuguese', nome || ' ' || descricao) @@ plainto_tsquery('portuguese', $${paramCount})`);
-        params.push(parsedQuery.palavraChave);
-        paramCount++;
-      }
-
-      if (parsedQuery.escala) {
-        conditions.push(`escala = $${paramCount}`);
-        params.push(parsedQuery.escala);
-        paramCount++;
-      }
-
-      if (parsedQuery.tipoProduto) {
-        conditions.push(`tipo_produto = $${paramCount}`);
-        params.push(parsedQuery.tipoProduto);
-        paramCount++;
-      }
-
-      if (parsedQuery.projeto) {
-        conditions.push(`projeto = $${paramCount}`);
-        params.push(parsedQuery.projeto);
-        paramCount++;
-      }
-
-      if (parsedQuery.periodoPublicacao) {
-        conditions.push(`data_publicacao BETWEEN $${paramCount} AND $${paramCount + 1}`);
-        params.push(parsedQuery.periodoPublicacao.inicio, parsedQuery.periodoPublicacao.fim);
-        paramCount += 2;
-      }
-
-      if (parsedQuery.periodoCriacao) {
-        conditions.push(`data_criacao BETWEEN $${paramCount} AND $${paramCount + 1}`);
-        params.push(parsedQuery.periodoCriacao.inicio, parsedQuery.periodoCriacao.fim);
-        paramCount += 2;
-      }
-
-      if (parsedQuery.bbox) {
-        conditions.push(`ST_Intersects(
-          geometry, 
-          ST_MakeEnvelope($${paramCount}, $${paramCount + 1}, $${paramCount + 2}, $${paramCount + 3}, 4326)
-        )`);
-        params.push(parsedQuery.bbox.oeste, parsedQuery.bbox.sul, parsedQuery.bbox.leste, parsedQuery.bbox.norte);
-        paramCount += 4;
-      }
-
-      if (parsedQuery.municipio) {
-        conditions.push(`EXISTS (
-          SELECT 1 FROM municipios m 
-          WHERE m.nome = $${paramCount} 
-          AND ST_Intersects(datasets.geometry, m.geometry)
-        )`);
-        params.push(parsedQuery.municipio);
-        paramCount++;
-      }
-
-      if (parsedQuery.estado) {
-        conditions.push(`EXISTS (
-          SELECT 1 FROM estados e 
-          WHERE e.nome = $${paramCount} 
-          AND ST_Intersects(datasets.geometry, e.geometry)
-        )`);
-        params.push(parsedQuery.estado);
-        paramCount++;
-      }
-
-      if (parsedQuery.areaSuprimento) {
-        conditions.push(`EXISTS (
-          SELECT 1 FROM areas_suprimento a 
-          WHERE a.nome = $${paramCount} 
-          AND ST_Intersects(datasets.geometry, a.geometry)
-        )`);
-        params.push(parsedQuery.areaSuprimento);
-        paramCount++;
-      }
-
-      const whereClause = conditions.length > 0 
-        ? 'WHERE ' + conditions.join(' AND ')
-        : '';
-
-      const sql = `
-        SELECT 
-          nome,
-          descricao,
-          escala,
-          tipo_produto as "tipoProduto",
-          projeto,
-          data_publicacao as "dataPublicacao",
-          data_criacao as "dataCriacao",
-          ST_AsGeoJSON(geometry)::json as geometry
-        FROM datasets
-        ${whereClause}
-        ORDER BY data_publicacao DESC
-        LIMIT 100
-      `;
-
-      logger.debug('Executing search query:', { sql, params });
-
-      const results = await db.any(sql, params);
-
-      logger.info(`Found ${results.length} results`);
-      
-      return results;
-    } catch (error) {
-      logger.error('Search error:', error);
-      throw error;
+      logger.error(
+        { error, searchParams, pagination },
+        'Error executing search',
+      );
+      throw new Error('Error executing search');
     }
   }
 }

@@ -1,86 +1,148 @@
 import { Router } from 'express';
-import { SearchService } from '@/services/search';
-import { LLMService } from '@/services/llm';
-import { validateNaturalLanguageQuery, validateStructuredSearch } from '@/middleware/validation';
-import { config } from '@/config';
-import { logger } from '@/utils/logger';
+import { SearchService } from '../services/search.js';
+import { LLMService } from '../services/llm/index.js'; // Atualizado
+import {
+  validateNaturalLanguageQuery,
+  validateFullSearchRequest,
+} from '../middleware/validation.js';
+import { config } from '../config/index.js';
+import { logger } from '../utils/logger.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+  SCALES,
+  PRODUCT_TYPES,
+  SUPPLY_AREAS,
+  PROJECTS,
+  SORT_FIELDS,
+  SORT_DIRECTIONS,
+} from '../types/api.js';
+import type { ApiError } from '../types/errors.js';
 
 const router = Router();
 const searchService = new SearchService();
 const llmService = new LLMService(config.llm.baseUrl);
 
-// Rota para busca inicial com linguagem natural
-router.post('/natural-search', validateNaturalLanguageQuery, async (req, res) => {
-  try {
-    // Processa a query em linguagem natural
-    const structuredSearch = await llmService.processQuery(req.body.query);
-    logger.debug('Processed natural language query:', { structuredSearch });
+// Natural language search endpoint
+router.post(
+  '/natural-search',
+  validateNaturalLanguageQuery,
+  asyncHandler(async (req, res) => {
+    try {
+      // Process natural language query com pré-processamento melhorado
+      const searchParams = await llmService.processQuery(req.body);
 
-    // Executa a busca com a query estruturada
-    const searchResults = await searchService.search(structuredSearch);
-
-    res.json({
-      ...searchResults,
-      queryMetadata: {
-        originalQuery: req.body.query
-      }
-    });
-  } catch (error) {
-    logger.error('Natural language search error:', error);
-    
-    if (error instanceof Error && error.message.includes('Não foi possível entender')) {
-      return res.status(400).json({ 
-        error: error.message,
-        originalQuery: req.body.query 
+      // Execute search with processed parameters and first page
+      const searchResults = await searchService.search({
+        searchParams,
+        pagination: { page: 1, limit: searchParams.limit || 10 },
       });
+
+      // Return results with expanded metadata
+      return res.json({
+        items: searchResults.items,
+        metadata: {
+          ...searchResults.metadata,
+          originalQuery: req.body.query,
+          processedQuery: searchParams, // Adicionado para debug
+        },
+      });
+    } catch (error) {
+      const apiError = error as ApiError;
+
+      // Consolidated error logging
+      logger.error(
+        {
+          stage: 'natural_search',
+          error: apiError,
+          query: req.body.query,
+          timestamp: new Date().toISOString(),
+        },
+        'Natural language search failed',
+      );
+
+      // Return standardized error format
+      return res
+        .status(
+          apiError.code === 'VALIDATION_ERROR' ||
+            apiError.code === 'INVALID_JSON'
+            ? 400
+            : 500,
+        )
+        .json(apiError);
     }
-    
-    res.status(500).json({ 
-      error: 'Erro interno do servidor',
-      originalQuery: req.body.query 
+  }),
+);
+
+// Structured search endpoint
+router.post(
+  '/structured-search',
+  validateFullSearchRequest,
+  asyncHandler(async (req, res) => {
+    try {
+      const { searchParams, bbox, pagination } = req.body;
+
+      // Log structured request
+      logger.info(
+        {
+          stage: 'structured_search',
+          request: req.body,
+          timestamp: new Date().toISOString(),
+        },
+        'Structured search request received',
+      );
+
+      const searchResults = await searchService.search({
+        searchParams,
+        bbox,
+        pagination,
+      });
+
+      return res.json({
+        items: searchResults.items,
+        metadata: {
+          ...searchResults.metadata,
+          bbox,
+        },
+      });
+    } catch (error) {
+      // Log error
+      logger.error(
+        {
+          stage: 'structured_search',
+          error,
+          request: req.body,
+          timestamp: new Date().toISOString(),
+        },
+        'Structured search failed',
+      );
+
+      // Format error as ApiError
+      const apiError: ApiError = {
+        error: 'Error executing structured search',
+        code: 'SEARCH_ERROR',
+        details: error,
+      };
+
+      return res.status(500).json(apiError);
+    }
+  }),
+);
+
+// Metadata endpoint (valid values)
+router.get(
+  '/metadata',
+  asyncHandler(async (_req, res) => {
+    return res.json({
+      scales: SCALES,
+      productTypes: PRODUCT_TYPES,
+      supplyAreas: SUPPLY_AREAS,
+      projects: PROJECTS,
+      sorting: {
+        fields: SORT_FIELDS,
+        directions: SORT_DIRECTIONS,
+      },
     });
-  }
-});
-
-// Rota para navegação/paginação com busca estruturada
-router.post('/structured-search', validateStructuredSearch, async (req, res) => {
-  try {
-    const searchResults = await searchService.search(req.body);
-    res.json(searchResults);
-  } catch (error) {
-    logger.error('Structured search error:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
-  }
-});
-
-// Endpoint para metadados (valores válidos)
-router.get('/metadata', (req, res) => {
-  res.json({
-    escalas: ['1:25.000', '1:50.000', '1:100.000', '1:250.000'],
-    tiposProduto: ['Carta Topografica', 'Carta Ortoimagem', 'Carta Tematica'],
-    areasSuprimento: [
-      '1° Centro de Geoinformação (1° CGEO)',
-      '2° Centro de Geoinformação (2° CGEO)',
-      '3° Centro de Geoinformação (3° CGEO)',
-      '4° Centro de Geoinformação (4° CGEO)',
-      '5° Centro de Geoinformação (5° CGEO)'
-    ],
-    projetos: [
-      'Rondônia',
-      'Amapá',
-      'Bahia',
-      'BECA',
-      'Rio Grande do Sul',
-      'Mapeamento Sistemático',
-      'Copa do Mundo 2014',
-      'Olimpíadas',
-      'Copa das Confereções 2013'
-    ],
-    ordenacao: {
-      campos: ['dataPublicacao', 'dataCriacao'],
-      direcoes: ['ASC', 'DESC']
-    }
-  });
-});
+  }),
+);
 
 export default router;
