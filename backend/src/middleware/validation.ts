@@ -9,7 +9,6 @@ import {
   SORT_DIRECTIONS,
 } from '../types/api.js';
 
-// Base reusable schemas
 export const DateRangeSchema = z
   .object({
     start: z
@@ -47,7 +46,6 @@ export const BBoxSchema = z
     },
   );
 
-// Main search parameters schema
 export const SearchParamsSchema = z.object({
   keyword: z.string().optional(),
   scale: z.enum([...SCALES]).optional(),
@@ -63,33 +61,28 @@ export const SearchParamsSchema = z.object({
   limit: z.number().min(1).max(100).optional(),
 });
 
-// Pagination schema
 export const PaginationSchema = z
   .object({
     page: z.number().min(1, 'Page must be greater than 0'),
-    limit: z.number().min(1).max(100, 'Limit must be between 1 and 100'),
   })
   .default({
     page: 1,
-    limit: 10,
   });
 
-// Natural language query schema
 export const NaturalLanguageSchema = z.object({
   query: z
     .string()
-    .min(10, 'Query must be at least 10 characters long')
+    .min(5, 'Query must be at least 5 characters long')
     .max(500, 'Query must not exceed 500 characters'),
+  bbox: BBoxSchema.optional(),
 });
 
-// Full search request schema
 export const FullSearchRequestSchema = z.object({
   searchParams: SearchParamsSchema,
   bbox: BBoxSchema.optional(),
   pagination: PaginationSchema,
 });
 
-// Validation middlewares
 export const validateNaturalLanguageQuery = (
   req: Request,
   res: Response,

@@ -43,12 +43,11 @@ export type Project = (typeof PROJECTS)[number];
 export type SortField = (typeof SORT_FIELDS)[number];
 export type SortDirection = (typeof SORT_DIRECTIONS)[number];
 
-// Natural language query interface
 export interface NaturalLanguageQuery {
   query: string;
+  bbox?: BoundingBox;
 }
 
-// Core search parameters interface (what LLM extracts)
 export interface SearchParams {
   keyword?: string;
   scale?: Scale;
@@ -70,7 +69,6 @@ export interface SearchParams {
   limit?: number;
 }
 
-// Additional parameters added by API
 export interface BoundingBox {
   north: number;
   south: number;
@@ -83,7 +81,6 @@ export interface PaginationParams {
   limit: number;
 }
 
-// Search result interfaces
 export interface SearchResult {
   name: string;
   description: string;
@@ -100,8 +97,7 @@ export interface SearchMetadata {
   page: number;
   limit: number;
   totalPages: number;
-  appliedParams: SearchParams;
-  originalQuery?: string;
+  processedQuery?: SearchParams;
 }
 
 export interface QueryResult {
@@ -113,9 +109,10 @@ export interface OllamaApiResponse {
   response: string;
 }
 
-// Full search request interface (includes everything)
 export interface FullSearchRequest {
   searchParams: SearchParams;
   bbox?: BoundingBox;
-  pagination: PaginationParams;
+  pagination: {
+    page: number;
+  };
 }

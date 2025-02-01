@@ -185,7 +185,7 @@ export class SearchService {
           page: pagination.page,
           limit: pagination.limit,
           totalPages: Math.ceil(total.total / pagination.limit),
-          appliedParams: searchParams,
+          processedQuery: searchParams,
         },
       };
     } catch (error) {

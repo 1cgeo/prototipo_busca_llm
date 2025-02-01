@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { SearchService } from '../services/search.js';
-import { LLMService } from '../services/llm/index.js'; // Atualizado
+import { LLMService } from '../services/llm/index.js';
 import {
   validateNaturalLanguageQuery,
   validateFullSearchRequest,
@@ -22,34 +22,39 @@ const router = Router();
 const searchService = new SearchService();
 const llmService = new LLMService(config.llm.baseUrl);
 
-// Natural language search endpoint
 router.post(
   '/natural-search',
   validateNaturalLanguageQuery,
   asyncHandler(async (req, res) => {
     try {
-      // Process natural language query com pré-processamento melhorado
-      const searchParams = await llmService.processQuery(req.body);
+      const { query, bbox } = req.body;
 
-      // Execute search with processed parameters and first page
+      // Process natural language query
+      const searchParams = await llmService.processQuery({ query });
+
       const searchResults = await searchService.search({
         searchParams,
-        pagination: { page: 1, limit: searchParams.limit || 10 },
+        bbox,
+        pagination: {
+          page: 1,
+          limit: searchParams.limit || 10,
+        },
       });
 
-      // Return results with expanded metadata
       return res.json({
         items: searchResults.items,
         metadata: {
-          ...searchResults.metadata,
-          originalQuery: req.body.query,
-          processedQuery: searchParams, // Adicionado para debug
+          total: searchResults.metadata.total,
+          page: searchResults.metadata.page,
+          limit: searchResults.metadata.limit,
+          totalPages: searchResults.metadata.totalPages,
+          originalQuery: query,
+          processedQuery: searchParams,
         },
       });
     } catch (error) {
       const apiError = error as ApiError;
 
-      // Consolidated error logging
       logger.error(
         {
           stage: 'natural_search',
@@ -60,7 +65,6 @@ router.post(
         'Natural language search failed',
       );
 
-      // Return standardized error format
       return res
         .status(
           apiError.code === 'VALIDATION_ERROR' ||
@@ -73,15 +77,14 @@ router.post(
   }),
 );
 
-// Structured search endpoint
 router.post(
   '/structured-search',
   validateFullSearchRequest,
   asyncHandler(async (req, res) => {
     try {
       const { searchParams, bbox, pagination } = req.body;
+      const limit = searchParams.limit || 10;
 
-      // Log structured request
       logger.info(
         {
           stage: 'structured_search',
@@ -94,18 +97,23 @@ router.post(
       const searchResults = await searchService.search({
         searchParams,
         bbox,
-        pagination,
+        pagination: {
+          ...pagination,
+          limit,
+        },
       });
 
       return res.json({
         items: searchResults.items,
         metadata: {
-          ...searchResults.metadata,
-          bbox,
+          total: searchResults.metadata.total,
+          page: searchResults.metadata.page,
+          limit: searchResults.metadata.limit,
+          totalPages: searchResults.metadata.totalPages,
+          processedQuery: searchParams,
         },
       });
     } catch (error) {
-      // Log error
       logger.error(
         {
           stage: 'structured_search',
@@ -116,7 +124,6 @@ router.post(
         'Structured search failed',
       );
 
-      // Format error as ApiError
       const apiError: ApiError = {
         error: 'Error executing structured search',
         code: 'SEARCH_ERROR',
