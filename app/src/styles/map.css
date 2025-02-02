@@ -1,0 +1,38 @@
+/* Transições suaves para elementos do mapa */
+.maplibregl-popup {
+    transition: opacity 0.2s ease-in-out;
+  }
+  
+  .maplibregl-popup-anchor-top,
+  .maplibregl-popup-anchor-bottom,
+  .maplibregl-popup-anchor-left,
+  .maplibregl-popup-anchor-right {
+    transition: transform 0.2s ease-in-out;
+  }
+  
+  /* Melhorias de acessibilidade */
+  .maplibregl-ctrl button:focus {
+    outline: 2px solid var(--focus-color, #1976d2);
+    outline-offset: 2px;
+  }
+  
+  /* Estilos do cursor */
+  .maplibregl-canvas-container {
+    transition: cursor 0.1s ease-in-out;
+  }
+  
+  /* Animação suave para zoom/pan */
+  .maplibregl-canvas {
+    transition: transform 0.3s ease-out;
+  }
+  
+  /* Responsividade para controles em telas pequenas */
+  @media (max-width: 600px) {
+    .maplibregl-ctrl-group {
+      margin: 8px !important;
+    }
+  
+    .maplibregl-ctrl-scale {
+      margin: 8px !important;
+    }
+  }

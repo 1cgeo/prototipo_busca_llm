@@ -1,13 +1,21 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { SearchState, SearchFilters, SearchResult, PaginationInfo } from '../types/search';
+import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { 
+  SearchState,
+  SearchParams,
+  SearchResult,
+  PaginationInfo,
+  BoundingBox
+} from '@/types/search';
 
 interface SearchContextType {
   state: SearchState;
   setResults: (results: SearchResult[]) => void;
-  setFilters: (filters: SearchFilters) => void;
+  setFilters: (filters: SearchParams) => void;
   setPagination: (pagination: PaginationInfo) => void;
   setLoading: (loading: boolean) => void;
   setError: (error?: string) => void;
+  setOriginalQuery: (query: string) => void;
+  setBoundingBox: (bbox?: BoundingBox) => void;
   reset: () => void;
 }
 
@@ -16,19 +24,21 @@ const initialState: SearchState = {
   filters: {},
   pagination: {
     total: 0,
-    pagina: 1,
-    limite: 10,
-    totalPaginas: 0
+    page: 1,
+    limit: 10,
+    totalPages: 0
   },
   loading: false
 };
 
 type SearchAction =
   | { type: 'SET_RESULTS'; payload: SearchResult[] }
-  | { type: 'SET_FILTERS'; payload: SearchFilters }
+  | { type: 'SET_FILTERS'; payload: SearchParams }
   | { type: 'SET_PAGINATION'; payload: PaginationInfo }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload?: string }
+  | { type: 'SET_ORIGINAL_QUERY'; payload: string }
+  | { type: 'SET_BBOX'; payload?: BoundingBox }
   | { type: 'RESET' };
 
 function searchReducer(state: SearchState, action: SearchAction): SearchState {
@@ -43,6 +53,10 @@ function searchReducer(state: SearchState, action: SearchAction): SearchState {
       return { ...state, loading: action.payload };
     case 'SET_ERROR':
       return { ...state, error: action.payload };
+    case 'SET_ORIGINAL_QUERY':
+      return { ...state, originalQuery: action.payload };
+    case 'SET_BBOX':
+      return { ...state, bbox: action.payload };
     case 'RESET':
       return initialState;
     default:
@@ -59,7 +73,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     state,
     setResults: (results: SearchResult[]) => 
       dispatch({ type: 'SET_RESULTS', payload: results }),
-    setFilters: (filters: SearchFilters) => 
+    setFilters: (filters: SearchParams) => 
       dispatch({ type: 'SET_FILTERS', payload: filters }),
     setPagination: (pagination: PaginationInfo) => 
       dispatch({ type: 'SET_PAGINATION', payload: pagination }),
@@ -67,6 +81,10 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: loading }),
     setError: (error?: string) => 
       dispatch({ type: 'SET_ERROR', payload: error }),
+    setOriginalQuery: (query: string) =>
+      dispatch({ type: 'SET_ORIGINAL_QUERY', payload: query }),
+    setBoundingBox: (bbox?: BoundingBox) =>
+      dispatch({ type: 'SET_BBOX', payload: bbox }),
     reset: () => dispatch({ type: 'RESET' })
   };
 

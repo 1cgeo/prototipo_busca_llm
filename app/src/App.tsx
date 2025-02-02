@@ -1,11 +1,15 @@
-import React from 'react';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import SearchPage from '@/pages/SearchPage';
+import { SearchProvider } from '@/contexts/SearchContext';
+import { CssBaseline } from '@mui/material';
+import AppLayout from '@/components/layouts/AppLayout';
 
 export default function App() {
   return (
     <ThemeProvider>
-      <SearchPage />
+      <CssBaseline />
+      <SearchProvider>
+        <AppLayout />
+      </SearchProvider>
     </ThemeProvider>
   );
 }

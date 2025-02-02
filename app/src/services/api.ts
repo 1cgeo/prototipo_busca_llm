@@ -1,55 +1,57 @@
-import { SearchFilters, SearchMetadata, SearchResult } from '../types/search';
+import { 
+  SearchParams, 
+  SearchResponse, 
+  MetadataOptions, 
+  BoundingBox,
+  ApiError
+} from '@/types/search';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
-export async function naturalLanguageSearch(query: string) {
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const error = await response.json() as ApiError;
+    throw new Error(error.error || 'An error occurred');
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function naturalLanguageSearch(
+  query: string, 
+  bbox?: BoundingBox
+): Promise<SearchResponse> {
   const response = await fetch(`${API_URL}/natural-search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, bbox }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Erro na busca');
-  }
-
-  return response.json();
+  return handleResponse<SearchResponse>(response);
 }
 
 export async function structuredSearch(
-  filters: SearchFilters,
-  ordenacao: { campo: string; direcao: string },
-  paginacao: { pagina: number; limite: number }
-) {
+  searchParams: SearchParams,
+  pagination: { page: number },
+  bbox?: BoundingBox
+): Promise<SearchResponse> {
   const response = await fetch(`${API_URL}/structured-search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      filtros: filters,
-      ordenacao,
-      paginacao,
+      searchParams,
+      bbox,
+      pagination
     }),
   });
 
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Erro na busca');
-  }
-
-  return response.json();
+  return handleResponse<SearchResponse>(response);
 }
 
-export async function getMetadata(): Promise<SearchMetadata> {
+export async function getMetadata(): Promise<MetadataOptions> {
   const response = await fetch(`${API_URL}/metadata`);
-
-  if (!response.ok) {
-    throw new Error('Erro ao carregar metadados');
-  }
-
-  return response.json();
+  return handleResponse<MetadataOptions>(response);
 }

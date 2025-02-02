@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './styles/global.css'
+import './styles/map.css'
 
 // Desabilita logs em produção
 if (process.env.NODE_ENV === 'production') {
