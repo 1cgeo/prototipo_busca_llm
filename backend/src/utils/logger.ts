@@ -1,7 +1,15 @@
 import { pino } from 'pino';
 import { type Logger } from 'pino';
+import { mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
 
-// Criamos o transport como antes
+// Ensure logs directory exists
+const logsDir = join(process.cwd(), 'logs');
+if (!existsSync(logsDir)) {
+  mkdirSync(logsDir, { recursive: true });
+}
+
+// Create transports
 const transports = pino.transport({
   targets: [
     {
@@ -15,13 +23,13 @@ const transports = pino.transport({
     },
     {
       target: 'pino/file',
-      options: { destination: './logs/app.log' },
+      options: { destination: join(logsDir, 'app.log') },
       level: 'info',
     },
   ],
 });
 
-// Declaramos explicitamente o tipo Logger
+// Create and export logger
 export const logger: Logger = pino(
   {
     level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',

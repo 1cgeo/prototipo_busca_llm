@@ -1,11 +1,20 @@
+-- Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS unaccent;
+
+-- Função imutável para normalização de texto
+CREATE OR REPLACE FUNCTION normalize_text(text)
+  RETURNS text AS
+$$
+  SELECT lower(unaccent($1))
+$$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
 
 -- Tabela de estados
 CREATE TABLE estados (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(50) NOT NULL,
     sigla CHAR(2) NOT NULL,
+    nome_normalizado TEXT GENERATED ALWAYS AS (normalize_text(nome)) STORED,
     geometry GEOMETRY(MULTIPOLYGON, 4326),
     CONSTRAINT uk_estados_nome UNIQUE (nome),
     CONSTRAINT uk_estados_sigla UNIQUE (sigla)
@@ -15,6 +24,7 @@ CREATE TABLE estados (
 CREATE TABLE municipios (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
+    nome_normalizado TEXT GENERATED ALWAYS AS (normalize_text(nome)) STORED,
     estado_id INTEGER REFERENCES estados(id),
     geometry GEOMETRY(MULTIPOLYGON, 4326)
 );
@@ -31,7 +41,7 @@ CREATE TABLE areas_suprimento (
         nome IN (
             '1° Centro de Geoinformação',
             '2° Centro de Geoinformação',
-            '3° Centro de Geoinformação ',
+            '3° Centro de Geoinformação',
             '4° Centro de Geoinformação',
             '5° Centro de Geoinformação'
         )
@@ -83,5 +93,5 @@ CREATE INDEX idx_datasets_filters ON datasets (escala, tipo_produto, projeto);
 CREATE INDEX idx_municipios_estado ON municipios(estado_id);
 
 -- Índices para buscas por nome normalizadas
-CREATE INDEX idx_estados_nome_busca ON estados (lower(unaccent(nome)));
-CREATE INDEX idx_municipios_nome_busca ON municipios (lower(unaccent(nome)));
+CREATE INDEX idx_estados_nome_normalizado ON estados(nome_normalizado);
+CREATE INDEX idx_municipios_nome_normalizado ON municipios(nome_normalizado);
