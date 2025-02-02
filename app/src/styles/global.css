@@ -1,24 +1,3 @@
-/* Estilos para o Maplibre GL */
-.maplibregl-map {
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  
-  .maplibregl-popup {
-    z-index: 1;
-  }
-  
-  .maplibregl-popup-content {
-    padding: 0 !important;
-    border-radius: 8px !important;
-    overflow: hidden;
-  }
-  
-  .maplibregl-popup-close-button {
-    padding: 4px 8px !important;
-    font-size: 16px !important;
-  }
-  
   /* Transições suaves para mudança de tema */
   body {
     transition: background-color 0.3s ease-in-out;

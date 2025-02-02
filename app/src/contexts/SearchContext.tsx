@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useState } from 'react';
 import { 
   SearchState,
   SearchParams,
@@ -16,6 +16,8 @@ interface SearchContextType {
   setError: (error?: string) => void;
   setOriginalQuery: (query: string) => void;
   setBoundingBox: (bbox?: BoundingBox) => void;
+  clearMapSelection: (() => void) | null;
+  setMapClearFunction: (fn: () => void) => void;
   reset: () => void;
 }
 
@@ -39,6 +41,7 @@ type SearchAction =
   | { type: 'SET_ERROR'; payload?: string }
   | { type: 'SET_ORIGINAL_QUERY'; payload: string }
   | { type: 'SET_BBOX'; payload?: BoundingBox }
+  | { type: 'SET_MAP_CLEAR_FN'; payload: () => void }
   | { type: 'RESET' };
 
 function searchReducer(state: SearchState, action: SearchAction): SearchState {
@@ -68,6 +71,7 @@ const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(searchReducer, initialState);
+  const [clearMapSelection, setClearMapSelection] = useState<(() => void) | null>(null);
 
   const value = {
     state,
@@ -83,8 +87,13 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       dispatch({ type: 'SET_ERROR', payload: error }),
     setOriginalQuery: (query: string) =>
       dispatch({ type: 'SET_ORIGINAL_QUERY', payload: query }),
-    setBoundingBox: (bbox?: BoundingBox) =>
-      dispatch({ type: 'SET_BBOX', payload: bbox }),
+    setBoundingBox: (bbox?: BoundingBox) => {
+      dispatch({ type: 'SET_BBOX', payload: bbox });
+    },
+    clearMapSelection,
+    setMapClearFunction: (fn: () => void) => {
+      setClearMapSelection(() => fn);
+    },
     reset: () => dispatch({ type: 'RESET' })
   };
 

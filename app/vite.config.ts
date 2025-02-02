@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
               '@emotion/styled'
             ],
             'vendor-utils': ['axios', 'lodash'],
-            'vendor-maps': ['maplibre-gl']
+            'vendor-maps': ['leaflet']
           }
         }
       },

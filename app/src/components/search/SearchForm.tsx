@@ -53,7 +53,8 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
     setError,
     setOriginalQuery,
     state,
-    setBoundingBox 
+    setBoundingBox,
+    clearMapSelection
   } = useSearch();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>();
@@ -83,10 +84,6 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
     setValidationError(undefined);
     setShowExamples(false);
   }, []);
-
-  const clearBoundingBox = useCallback(() => {
-    setBoundingBox(undefined);
-  }, [setBoundingBox]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -233,7 +230,12 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
             <Button
               color="inherit"
               size="small"
-              onClick={clearBoundingBox}
+              onClick={() => {
+                if (clearMapSelection) {
+                  clearMapSelection();
+                }
+                setBoundingBox(undefined);
+              }}
               startIcon={<ClearIcon />}
             >
               Limpar

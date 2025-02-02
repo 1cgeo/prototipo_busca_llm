@@ -124,7 +124,7 @@ export default function SearchPanel({ onShowResults }: SearchPanelProps) {
           <Fade key={mode} in={true}>
             <Box>
               {mode === 'natural' ? (
-                <SearchForm onSearch={onShowResults} />
+                <SearchForm onSearch={onShowResults}/>
               ) : loadingMetadata ? (
                 <Box sx={{ 
                   display: 'flex', 

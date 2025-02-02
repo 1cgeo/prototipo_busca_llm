@@ -9,6 +9,8 @@ import Map from '@/components/map/Map';
 import SearchPanel from '@/components/search/SearchPanel';
 import ResultsPanel from '@/components/search/ResultsPanel';
 
+const TOOLBAR_HEIGHT = 64; // Altura fixa da toolbar
+
 export default function AppLayout() {
   const { isDarkMode, toggleTheme } = useAppTheme();
   const { state } = useSearch();
@@ -23,53 +25,55 @@ export default function AppLayout() {
       position: 'relative',
       overflow: 'hidden'
     }}>
-      {/* Mapa Base */}
-      <Box sx={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0
-      }}>
-        <Map enableBboxSelection />
-      </Box>
-
       {/* AppBar */}
       <AppBar 
         position="relative" 
-        color="transparent" 
-        elevation={0}
         sx={{ 
-          background: theme => `linear-gradient(180deg, 
-            ${theme.palette.background.paper} 0%, 
-            ${theme.palette.background.paper}CC 60%, 
-            ${theme.palette.background.paper}00 100%
-          )`,
-          backdropFilter: 'blur(8px)',
-          zIndex: 2
+          backgroundColor: theme => theme.palette.background.paper,
+          color: theme => isDarkMode ? 'inherit' : theme.palette.grey[800],
+          zIndex: theme => theme.zIndex.drawer + 1
         }}
+        elevation={3}
       >
         <Toolbar>
           <MapIcon sx={{ mr: 2, color: 'primary.main' }} />
           <Typography 
             variant="h6" 
             component="div" 
-            sx={{ flexGrow: 1, fontWeight: 500 }}
+            sx={{ 
+              flexGrow: 1, 
+              fontWeight: 500
+            }}
           >
             Protótipo busca por LLM
           </Typography>
 
-          <IconButton onClick={toggleTheme} color="inherit">
+          <IconButton 
+            onClick={toggleTheme} 
+            sx={{ 
+              color: theme => isDarkMode ? 'inherit' : theme.palette.grey[700]
+            }}
+          >
             {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
           </IconButton>
         </Toolbar>
       </AppBar>
 
+      {/* Mapa Base */}
+      <Box sx={{ 
+        position: 'relative',
+        flex: 1,
+        height: `calc(100vh - ${TOOLBAR_HEIGHT}px)`
+      }}>
+        <Map 
+          enableBboxSelection 
+        />
+      </Box>
+
       {/* Container de Painéis */}
       <Box sx={{
         position: 'absolute',
-        top: 0,
+        top: TOOLBAR_HEIGHT,
         left: 0,
         right: 0,
         bottom: 0,
@@ -77,19 +81,21 @@ export default function AppLayout() {
         flexDirection: 'column',
         alignItems: 'center',
         pointerEvents: 'none',
-        zIndex: 1
+        zIndex: theme => theme.zIndex.drawer + 2
       }}>
         {/* Painel de Busca */}
         <Box
           sx={{
             width: '100%',
             maxWidth: 600,
-            mt: 9,
+            mt: 2,
             px: 2,
             pointerEvents: 'auto'
           }}
         >
-          <SearchPanel onShowResults={() => setShowResults(true)} />
+          <SearchPanel 
+            onShowResults={() => setShowResults(true)} 
+          />
         </Box>
 
         {/* Painel de Resultados */}
