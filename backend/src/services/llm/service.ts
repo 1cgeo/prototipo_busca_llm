@@ -69,7 +69,7 @@ export class LLMService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         prompt,
-        model: 'deepseek-r1:7b',
+        model: 'deepseek-r1:1.5b',
         temperature: 0.6,
         max_tokens: 1000,
         stream: false,
@@ -93,91 +93,83 @@ export class LLMService {
     const sortFieldsStr = SORT_FIELDS.map(f => `"${f}"`).join(', ');
     const sortDirectionsStr = SORT_DIRECTIONS.map(d => `"${d}"`).join(', ');
 
-    return `You are a specialized system for processing cartographic data queries in Portuguese. 
-Your task is to analyze a query in Portuguese about cartographic data and extract structured information.
+    return `You are a specialized system for processing cartographic data queries. Your task is to convert natural language queries in Portuguese into structured JSON format.
 
-Given query in Portuguese: "${query}"
+Query in Portuguese: "${query}"
 
 Current date: ${today}
 
-First, answer these questions about the query (think step by step):
+First, analyze the query by answering these questions (think step by step):
 
-1. Map Scale:
+1. Scale:
 - Is there any mention of scale (escala)?
-- Look for patterns like "1:25.000", "25k", "50k", "grande escala", "pequena escala"
-- Valid scales are: ${scalesStr}
+- Check for: "1:25.000", "25k", "grande escala", etc.
+- Remember: "grande escala" = 1:25.000, "média" = 1:100.000, "pequena" = 1:250.000
+- Valid scales: ${scalesStr}
 
 2. Product Type:
-- What type of cartographic product is being requested?
-- Look for terms like "carta topográfica", "carta ortoimagem", "carta temática"
-- Valid types are: ${productTypesStr}
+- What type of cartographic product is requested?
+- Check for: "carta topográfica", "carta ortoimagem", "mapa", etc.
+- Remember: "mapa" = "carta"
+- Valid types: ${productTypesStr}
 
 3. Geographic Location:
-- Is there any mention of specific Brazilian states or cities?
-- Look for state names, abbreviations (RJ, SP, etc.), or city names
+- Any mention of Brazilian states or cities?
+- Check state abbreviations (RJ = Rio de Janeiro)
+- Check city names
 
 4. Supply Area:
-- Is there any mention of "CGEO" or "Centro de Geoinformação"?
-- Look for patterns like "1º CGEO", "2° CGEO", etc.
-- Valid areas are: ${supplyAreasStr}
+- Any mention of CGEO/Centro de Geoinformação?
+- Check patterns: "1º CGEO", "2° CGEO", etc.
+- Valid areas: ${supplyAreasStr}
 
 5. Project:
-- Is there any mention of specific mapping projects?
-- Valid projects are: ${projectsStr}
+- Any mention of specific projects?
+- Check variations: "copa" = "Copa do Mundo 2014"
+- Valid projects: ${projectsStr}
 
-6. Time Periods:
-- Are there any temporal references?
-- Look for date ranges, years, or relative terms like "último ano", "recente"
-- Consider terms like "publicado em", "criado em", "entre X e Y"
+6. Time Period:
+- Any temporal references?
+- Check for: "último ano", "recente", "publicado em"
+- Convert relative dates using current date
 
-7. Sorting:
-- Is there any mention of ordering or sorting?
-- Look for terms like "mais recente", "mais antigo", "por data de criação"
+7. Sorting & Quantity:
+- Any mention of ordering or limits?
+- Check for: "mais recente", "mais antigo", "primeiros 20"
 - Valid sort fields: ${sortFieldsStr}
 - Valid directions: ${sortDirectionsStr}
 
-8. Quantity:
-- Is there any mention of quantity or limit?
-- Look for numbers followed by "cartas", "resultados", etc.
-
-Now, based on your analysis, generate a JSON response that INCLUDES ONLY the information that was EXPLICITLY or STRONGLY IMPLIED in the query.
-
-The JSON must follow this structure:
+Example of complex query processing:
+Query: "Preciso de 20 cartas topográficas 1:25.000 do 2° CGEO publicadas em 2023 ordenadas por data de criação mais antiga"
+\`\`\`json
 {
-  "keyword": "text for general search, if any",
-  "scale": one of [${scalesStr}],
-  "productType": one of [${productTypesStr}],
-  "state": "state name if mentioned",
-  "city": "city name if mentioned",
-  "supplyArea": one of [${supplyAreasStr}],
-  "project": one of [${projectsStr}],
+  "productType": "Carta Topográfica",
+  "scale": "1:25.000",
+  "supplyArea": "2° Centro de Geoinformação",
   "publicationPeriod": {
-    "start": "YYYY-MM-DD",
-    "end": "YYYY-MM-DD"
+    "start": "2023-01-01",
+    "end": "2023-12-31"
   },
-  "creationPeriod": {
-    "start": "YYYY-MM-DD",
-    "end": "YYYY-MM-DD"
-  },
-  "sortField": one of [${sortFieldsStr}],
-  "sortDirection": one of [${sortDirectionsStr}],
-  "limit": number between 1 and 100
+  "sortField": "creationDate",
+  "sortDirection": "ASC",
+  "limit": 20
 }
+\`\`\`
 
-Important rules:
-1. Include ONLY fields that were explicitly mentioned or strongly implied
-2. For dates, convert relative terms to actual dates using current date
-3. Use EXACT values from the provided valid options
+Essential Rules:
+1. Include ONLY explicitly mentioned or strongly implied fields
+2. For dates: "recente" = last 6 months, "esse ano" = current year
+3. Use EXACT values from provided valid options
 4. When in doubt, omit the field
-5. Response must be ONLY the JSON, with NO additional text or explanations
+5. Response must be ONLY JSON between triple backticks
 
-Format your response EXACTLY like this:
+Format response EXACTLY like this:
 \`\`\`json
 {
   // only fields found in the query
 }
 \`\`\``;
-  }
+}
 }
 
 export default LLMService;
