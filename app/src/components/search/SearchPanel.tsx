@@ -1,20 +1,14 @@
 import { useState, useEffect } from 'react';
 import { 
-  Paper, 
   Box, 
   ToggleButtonGroup, 
   ToggleButton, 
-  Collapse, 
-  Fade,
-  IconButton,
-  Tooltip,
   CircularProgress,
-  Alert
+  Alert,
+  Collapse
 } from '@mui/material';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import FilterListIcon from '@mui/icons-material/FilterList';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import SearchForm from './SearchForm';
 import SearchFilters from './SearchFilters';
 import { useSearch } from '@/contexts/SearchContext';
@@ -24,17 +18,20 @@ import { MetadataOptions } from '@/types/search';
 type SearchMode = 'natural' | 'structured';
 
 interface SearchPanelProps {
-  onShowResults: () => void;
+  onSearch: () => void;
+  variant?: 'central' | 'drawer';
 }
 
-export default function SearchPanel({ onShowResults }: SearchPanelProps) {
+export default function SearchPanel({ 
+  onSearch,
+  variant = 'central'
+}: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>('natural');
-  const [expanded, setExpanded] = useState(true);
   const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [metadataError, setMetadataError] = useState<string>();
   const { state } = useSearch();
-
+  
   // Carregar metadados quando necessário
   useEffect(() => {
     const loadMetadata = async () => {
@@ -63,29 +60,27 @@ export default function SearchPanel({ onShowResults }: SearchPanelProps) {
     }
   };
 
-  const toggleExpanded = () => {
-    setExpanded(!expanded);
+  // Estilo do container baseado na variante
+  const containerStyles = variant === 'central' ? {
+    maxWidth: 600,
+    mx: 'auto',
+    p: 2,
+    borderRadius: 2,
+    bgcolor: 'background.paper',
+    boxShadow: 3
+  } : {
+    p: 2,
+    bgcolor: 'background.paper'
   };
 
   return (
-    <Paper
-      elevation={3}
-      sx={{
-        position: 'relative',
-        borderRadius: 2,
-        overflow: 'hidden',
-        transition: 'all 0.3s ease'
-      }}
-    >
-      {/* Header com Toggle de Modo */}
+    <Box sx={containerStyles}>
+      {/* Toggle de Modo */}
       <Box sx={{ 
-        p: 2, 
         display: 'flex', 
-        alignItems: 'center',
         justifyContent: 'center',
-        gap: 2,
-        borderBottom: expanded ? 1 : 0,
-        borderColor: 'divider'
+        alignItems: 'center',
+        mb: 2
       }}>
         <ToggleButtonGroup
           value={mode}
@@ -103,66 +98,51 @@ export default function SearchPanel({ onShowResults }: SearchPanelProps) {
             Filtros
           </ToggleButton>
         </ToggleButtonGroup>
-
-        <Tooltip title={expanded ? "Minimizar" : "Expandir"}>
-          <IconButton 
-            onClick={toggleExpanded}
-            size="small"
-            sx={{ 
-              position: 'absolute',
-              right: 8
-            }}
-          >
-            {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-          </IconButton>
-        </Tooltip>
       </Box>
 
       {/* Conteúdo do Painel */}
-      <Collapse in={expanded}>
-        <Box sx={{ p: 2 }}>
-          <Fade key={mode} in={true}>
-            <Box>
-              {mode === 'natural' ? (
-                <SearchForm onSearch={onShowResults}/>
-              ) : loadingMetadata ? (
-                <Box sx={{ 
-                  display: 'flex', 
-                  justifyContent: 'center',
-                  p: 4 
-                }}>
-                  <CircularProgress />
-                </Box>
-              ) : metadataError ? (
-                <Alert 
-                  severity="error"
-                  sx={{ mt: 2 }}
-                >
-                  {metadataError}
-                </Alert>
-              ) : metadata ? (
-                <SearchFilters 
-                  metadata={metadata} 
-                  onSearch={onShowResults} 
-                />
-              ) : null}
-            </Box>
-          </Fade>
-        </Box>
-      </Collapse>
+      <Box sx={{ 
+        maxHeight: variant === 'drawer' ? 'calc(100vh - 200px)' : 'auto',
+        overflowY: variant === 'drawer' ? 'auto' : 'visible'
+      }}>
+        {mode === 'natural' ? (
+          <SearchForm 
+            onSearch={onSearch}
+            variant={variant}
+          />
+        ) : loadingMetadata ? (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center',
+            p: 4 
+          }}>
+            <CircularProgress />
+          </Box>
+        ) : metadataError ? (
+          <Alert 
+            severity="error"
+            sx={{ mt: 2 }}
+          >
+            {metadataError}
+          </Alert>
+        ) : metadata ? (
+          <SearchFilters 
+            metadata={metadata} 
+            onSearch={onSearch}
+            variant={variant}
+          />
+        ) : null}
+      </Box>
 
       {/* Indicador de BBox */}
-      {state.bbox && expanded && (
-        <Box sx={{ 
-          p: 1, 
-          bgcolor: 'primary.main', 
-          color: 'primary.contrastText',
-          fontSize: '0.875rem',
-          textAlign: 'center'
-        }}>
+      <Collapse in={Boolean(state.bbox)}>
+        <Alert 
+          severity="info"
+          sx={{ mt: 2 }}
+        >
           Área selecionada no mapa será considerada na busca
-        </Box>
-      )}
-    </Paper>
+        </Alert>
+      </Collapse>
+    </Box>
   );
 }

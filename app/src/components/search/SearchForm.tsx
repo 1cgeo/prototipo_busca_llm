@@ -40,9 +40,13 @@ const validateQuery = (text: string): string | undefined => {
 
 interface SearchFormProps {
   onSearch: () => void;
+  variant?: 'central' | 'drawer';
 }
 
-export default function SearchForm({ onSearch }: SearchFormProps) {
+export default function SearchForm({ 
+  onSearch,
+  variant = 'central' 
+}: SearchFormProps) {
   const [query, setQuery] = useState('');
   const [showExamples, setShowExamples] = useState(false);
   const { 
@@ -59,7 +63,6 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>();
 
-  // Validação com debounce
   const debouncedValidation = useCallback(
     (text: string) => {
       setValidationError(validateQuery(text));
@@ -122,13 +125,21 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
     }
   };
 
+  const formStyles = variant === 'central' ? {
+    maxWidth: 800,
+    mx: 'auto',
+    mb: 4
+  } : {
+    width: '100%'
+  };
+
   return (
-    <Box sx={{ maxWidth: 800, mx: 'auto', mb: 4 }}>
+    <Box sx={formStyles}>
       {/* Formulário de Busca */}
       <Paper
         component="form"
         onSubmit={handleSubmit}
-        elevation={3}
+        elevation={variant === 'central' ? 3 : 0}
         sx={{
           p: '2px 4px',
           display: 'flex',
@@ -137,7 +148,9 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
           position: 'relative',
           border: theme => validationError 
             ? `1px solid ${theme.palette.error.main}` 
-            : 'none'
+            : variant === 'drawer' 
+              ? `1px solid ${theme.palette.divider}`
+              : 'none'
         }}
       >
         <InputBase
@@ -146,6 +159,7 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
           value={query}
           onChange={handleQueryChange}
           disabled={isSubmitting}
+          size="small"
           inputProps={{
             'aria-label': 'busca em linguagem natural',
             maxLength: 500,
@@ -178,102 +192,120 @@ export default function SearchForm({ onSearch }: SearchFormProps) {
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
         <Tooltip title="Buscar">
-          <IconButton 
-            type="submit" 
-            sx={{ p: '10px' }}
-            disabled={isSubmitting || Boolean(validationError)}
-            aria-label="buscar"
-            color="primary"
-          >
-            {isSubmitting ? (
-              <CircularProgress size={24} />
-            ) : (
-              <SearchIcon />
-            )}
-          </IconButton>
+          <span>
+            <IconButton 
+              type="submit" 
+              sx={{ p: '10px' }}
+              disabled={isSubmitting || Boolean(validationError)}
+              aria-label="buscar"
+              color="primary"
+            >
+              {isSubmitting ? (
+                <CircularProgress size={24} />
+              ) : (
+                <SearchIcon />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
       </Paper>
 
-      {/* Mensagem de erro de validação */}
-      <Collapse in={Boolean(validationError)}>
-        <Alert 
-          severity="error" 
-          sx={{ mt: 1 }}
-          variant="outlined"
-        >
-          {validationError}
-        </Alert>
-      </Collapse>
+      {/* Mensagens e Alertas */}
+      <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {/* Erro de validação */}
+        <Collapse in={Boolean(validationError)}>
+          <Alert 
+            severity="error" 
+            variant="outlined"
+          >
+            {validationError}
+          </Alert>
+        </Collapse>
 
-      {/* Query original */}
-      <Collapse in={Boolean(state.originalQuery)}>
-        <Alert 
-          severity="info" 
-          sx={{ mt: 1 }}
-          variant="outlined"
-        >
-          <AlertTitle>Última busca realizada</AlertTitle>
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {state.originalQuery}
-          </Typography>
-        </Alert>
-      </Collapse>
+        {/* Query original */}
+        <Collapse in={Boolean(state.originalQuery)}>
+          <Alert 
+            severity="info" 
+            variant="outlined"
+          >
+            <AlertTitle>Última busca realizada</AlertTitle>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              {state.originalQuery}
+            </Typography>
+          </Alert>
+        </Collapse>
 
-      {/* Alerta de BBox */}
-      <Collapse in={Boolean(state.bbox)}>
-        <Alert 
-          severity="info" 
-          sx={{ mt: 1 }}
-          variant="outlined"
-          icon={<PlaceIcon />}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() => {
-                if (clearMapSelection) {
-                  clearMapSelection();
-                }
-                setBoundingBox(undefined);
-              }}
-              startIcon={<ClearIcon />}
-            >
-              Limpar
-            </Button>
-          }
-        >
-          Busca será limitada à área selecionada no mapa
-        </Alert>
-      </Collapse>
-
-      {/* Exemplos de busca */}
-      <Collapse in={showExamples}>
-        <Alert 
-          severity="info" 
-          sx={{ mt: 2 }}
-          variant="outlined"
-        >
-          <AlertTitle>Exemplos de busca</AlertTitle>
-          <Box component="ul" sx={{ m: 0, pl: 2 }}>
-            {SEARCH_EXAMPLES.map((example, index) => (
-              <Box
-                component="li"
-                key={index}
-                sx={{
-                  my: 0.5,
-                  cursor: 'pointer',
-                  '&:hover': {
-                    color: 'primary.main',
+        {/* Alerta de BBox */}
+        <Collapse in={Boolean(state.bbox)}>
+          <Alert 
+            severity="info" 
+            variant="outlined"
+            icon={<PlaceIcon />}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  if (clearMapSelection) {
+                    clearMapSelection();
                   }
+                  setBoundingBox(undefined);
                 }}
-                onClick={() => handleExampleClick(example)}
+                startIcon={<ClearIcon />}
               >
-                {example}
-              </Box>
-            ))}
-          </Box>
-        </Alert>
-      </Collapse>
+                Limpar
+              </Button>
+            }
+          >
+            Busca será limitada à área selecionada no mapa
+          </Alert>
+        </Collapse>
+
+        {/* Exemplos de busca */}
+        <Collapse in={showExamples}>
+          <Alert 
+            severity="info" 
+            variant="outlined"
+            sx={{ mt: 1 }}
+          >
+            <AlertTitle>Exemplos de busca</AlertTitle>
+            <Box 
+              component="ul" 
+              sx={{ 
+                m: 0, 
+                pl: 2,
+                listStyleType: 'none'
+              }}
+            >
+              {SEARCH_EXAMPLES.map((example, index) => (
+                <Box
+                  component="li"
+                  key={index}
+                  sx={{
+                    my: 0.5,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    '&:hover': {
+                      color: 'primary.main',
+                    },
+                    '&::before': {
+                      content: '"•"',
+                      color: 'primary.main',
+                      display: 'inline-block',
+                      width: '1em',
+                      marginLeft: '-1em'
+                    }
+                  }}
+                  onClick={() => handleExampleClick(example)}
+                >
+                  {example}
+                </Box>
+              ))}
+            </Box>
+          </Alert>
+        </Collapse>
+      </Box>
     </Box>
   );
 }

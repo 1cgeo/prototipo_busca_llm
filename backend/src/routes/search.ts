@@ -30,7 +30,9 @@ router.post(
       const { query, bbox } = req.body;
 
       // Process natural language query
-      const searchParams = await llmService.processQuery({ query });
+      const { searchParams, preprocessedText } = await llmService.processQuery({
+        query,
+      });
 
       const searchResults = await searchService.search({
         searchParams,
@@ -50,6 +52,7 @@ router.post(
           totalPages: searchResults.metadata.totalPages,
           originalQuery: query,
           processedQuery: searchParams,
+          preprocessedText,
         },
       });
     } catch (error) {

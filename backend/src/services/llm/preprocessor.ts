@@ -1,100 +1,105 @@
 import { logger } from '../../utils/logger.js';
 import { COMMON_TERMS } from './constants.js';
-import { normalizeString } from './utils.js';
 
 interface ReplacementMatch {
-  start: number;
-  end: number;
-  replacement: string;
+    start: number;
+    end: number;
+    replacement: string;
+    original: string;
 }
 
-function findWordBoundary(
-  text: string,
-  position: number,
-  direction: 'forward' | 'backward',
-): number {
-  const isWordChar = (char: string) => /[\p{L}\p{N}]/u.test(char);
+function normalizeString(text: string): string {
+    return text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')  // remove acentos
+        .replace(/[^\w\s]/g, '')  // remove pontuação
+        .replace(/\s+/g, ' ')     // normaliza espaços
+        .trim();
+}
 
-  if (direction === 'forward') {
-    while (position < text.length && isWordChar(text[position])) position++;
-    return position;
-  } else {
-    while (position > 0 && isWordChar(text[position - 1])) position--;
-    return position;
-  }
+function preprocessText(text: string): string {
+    // Normaliza espaços e converte para minúsculo
+    return text
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
 }
 
 export function preprocessQuery(query: string): string {
-  // First, normalize spaces and trim
-  let processedQuery = query.replace(/\s+/g, ' ').trim();
+    // Pré-processa o texto inicial
+    let processedQuery = preprocessText(query);
+    const originalQueryNormalized = normalizeString(processedQuery);
+    const matches: ReplacementMatch[] = [];
 
-  // Create a list to store all matches and their positions
-  const matches: ReplacementMatch[] = [];
+    // Ordena termos do mais longo para o mais curto para evitar matches parciais
+    const sortedTerms = Object.entries(COMMON_TERMS)
+        .sort((a, b) => b[0].length - a[0].length);
 
-  // Find all potential matches
-  Object.entries(COMMON_TERMS).forEach(([term, replacement]) => {
-    // Convert both strings to lowercase for case-insensitive comparison
-    const normalizedTerm = normalizeString(term);
-    const normalizedQuery = normalizeString(processedQuery);
+    // Para cada termo no dicionário
+    for (const [term, replacement] of sortedTerms) {
+        const normalizedTerm = normalizeString(term);
+        let currentIndex = 0;
 
-    let searchStartIndex = 0;
-    while (true) {
-      const index = normalizedQuery.indexOf(normalizedTerm, searchStartIndex);
-      if (index === -1) break;
+        // Procura todas as ocorrências do termo
+        while (true) {
+            const index = originalQueryNormalized.indexOf(normalizedTerm, currentIndex);
+            if (index === -1) break;
 
-      // Find actual word boundaries
-      const startPos = findWordBoundary(processedQuery, index, 'backward');
-      const endPos = findWordBoundary(
-        processedQuery,
-        index + normalizedTerm.length,
-        'forward',
-      );
+            // Verifica se é uma palavra/frase completa
+            const beforeChar = index === 0 ? ' ' : originalQueryNormalized[index - 1];
+            const afterChar = index + normalizedTerm.length >= originalQueryNormalized.length 
+                ? ' ' 
+                : originalQueryNormalized[index + normalizedTerm.length];
 
-      // Verify this is a complete word/phrase match
-      const actualMatch = processedQuery.slice(startPos, endPos);
-      if (normalizeString(actualMatch) === normalizedTerm) {
-        matches.push({
-          start: startPos,
-          end: endPos,
-          replacement,
-        });
-      }
+            if (/\s/.test(beforeChar) && /\s/.test(afterChar)) {
+                matches.push({
+                    start: index,
+                    end: index + normalizedTerm.length,
+                    replacement: replacement,
+                    original: processedQuery.slice(index, index + normalizedTerm.length)
+                });
+            }
 
-      searchStartIndex = index + 1;
+            currentIndex = index + 1;
+        }
     }
-  });
 
-  // Sort matches by position in reverse order (to maintain indices when replacing)
-  matches.sort((a, b) => b.start - a.start);
+    // Ordena matches por posição (do fim para o início para manter índices válidos)
+    matches.sort((a, b) => b.start - a.start);
 
-  // Apply replacements from end to beginning to maintain indices
-  matches.forEach(match => {
-    processedQuery =
-      processedQuery.slice(0, match.start) +
-      match.replacement +
-      processedQuery.slice(match.end);
-  });
+    // Remove matches sobrepostos
+    const finalMatches = matches.filter((match, index) => {
+        return !matches.some((otherMatch, otherIndex) => {
+            if (index === otherIndex) return false;
+            return (
+                otherIndex < index && 
+                match.start < otherMatch.end && 
+                match.end > otherMatch.start
+            );
+        });
+    });
 
-  logger.debug(
-    {
-      stage: 'query_preprocessing',
-      originalQuery: query,
-      processedQuery,
-      replacements: matches,
-    },
-    'Query preprocessing complete',
-  );
+    // Aplica as substituições
+    finalMatches.forEach(match => {
+        processedQuery =
+            processedQuery.slice(0, match.start) +
+            match.replacement +
+            processedQuery.slice(match.end);
+    });
 
-  return processedQuery;
-}
+    logger.debug(
+        {
+            stage: 'query_preprocessing',
+            originalQuery: query,
+            processedQuery,
+            replacements: finalMatches.map(m => ({
+                original: m.original,
+                replacement: m.replacement
+            }))
+        },
+        'Query preprocessing complete'
+    );
 
-// Helper function to handle ordinal number variations
-export function normalizeOrdinalNumbers(text: string): string {
-  return text
-    .replace(/(\d+)[ºª°]?\s*(cgeo|CGEO)/gi, '$1° CGEO')
-    .replace(/primeiro/i, '1°')
-    .replace(/segundo/i, '2°')
-    .replace(/terceiro/i, '3°')
-    .replace(/quarto/i, '4°')
-    .replace(/quinto/i, '5°');
+    return processedQuery;
 }

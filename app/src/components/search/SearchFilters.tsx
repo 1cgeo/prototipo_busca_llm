@@ -14,7 +14,9 @@ import {
   Typography,
   SelectChangeEvent,
   Alert,
-  Stack
+  Stack,
+  IconButton,
+  CircularProgress,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -23,20 +25,116 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import FilterListIcon from '@mui/icons-material/FilterList';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
 dayjs.locale('pt-br');
+
+interface FilterSection {
+  id: string;
+  title: string;
+  icon: React.ReactNode;
+}
+
+const FILTER_SECTIONS: FilterSection[] = [
+  { 
+    id: 'identification', 
+    title: 'Identificação',
+    icon: <FilterAltIcon fontSize="small" />
+  },
+  { 
+    id: 'location', 
+    title: 'Localização',
+    icon: <LocationOnIcon fontSize="small" />
+  },
+  { 
+    id: 'project', 
+    title: 'Projeto',
+    icon: <AccountTreeIcon fontSize="small" />
+  },
+  { 
+    id: 'dates', 
+    title: 'Períodos',
+    icon: <CalendarTodayIcon fontSize="small" />
+  }
+];
+
+interface FilterSectionProps {
+  section: FilterSection;
+  isExpanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function FilterSectionComponent({ 
+  section, 
+  isExpanded, 
+  onToggle, 
+  children 
+}: FilterSectionProps) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Box
+        onClick={onToggle}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 1,
+          px: 2,
+          borderRadius: 1,
+          bgcolor: theme => theme.palette.action.hover,
+          cursor: 'pointer',
+          '&:hover': {
+            bgcolor: theme => theme.palette.action.selected,
+          }
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {section.icon}
+          <Typography variant="subtitle2" color="primary">
+            {section.title}
+          </Typography>
+        </Box>
+        <IconButton size="small" sx={{ p: 0 }}>
+          {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+        </IconButton>
+      </Box>
+      
+      <Box sx={{ 
+        display: isExpanded ? 'block' : 'none',
+        mt: 2,
+        px: 2
+      }}>
+        {children}
+      </Box>
+    </Box>
+  );
+}
 
 interface SearchFiltersProps {
   metadata: MetadataOptions;
   onSearch: () => void;
+  variant?: 'central' | 'drawer';
 }
 
-export default function SearchFilters({ metadata, onSearch }: SearchFiltersProps) {
+export default function SearchFilters({ 
+  metadata, 
+  onSearch,
+  variant = 'central'
+}: SearchFiltersProps) {
   const { state, setResults, setFilters, setPagination, setLoading, setError } = useSearch();
   const [localFilters, setLocalFilters] = useState<SearchParams>(state.filters);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string>('identification');
+
+  const handleSectionToggle = (sectionId: string) => {
+    setExpandedSection(expandedSection === sectionId ? '' : sectionId);
+  };
 
   const handleTextChange = (field: keyof SearchParams) => (
     event: React.ChangeEvent<HTMLInputElement>
@@ -116,144 +214,123 @@ export default function SearchFilters({ metadata, onSearch }: SearchFiltersProps
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box component="form" onSubmit={handleSubmit}>
-        <Stack spacing={3}>
-          {/* Seção de Identificação */}
-          <Box>
-            <Typography 
-              variant="subtitle2" 
-              color="primary" 
-              sx={{ 
-                mb: 2,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <FilterListIcon fontSize="small" />
-              Identificação
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Palavra-chave"
-                  value={localFilters.keyword || ''}
-                  onChange={handleTextChange('keyword')}
-                  placeholder="Busque por palavras-chave..."
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Escala</InputLabel>
-                  <Select
-                    value={localFilters.scale || ''}
-                    onChange={handleSelectChange('scale')}
-                    label="Escala"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
+      <Box 
+        component="form" 
+        onSubmit={handleSubmit}
+        sx={{
+          height: variant === 'drawer' ? 'calc(100vh - 200px)' : 'auto',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        {/* Área Scrollável */}
+        <Box sx={{ 
+          flex: 1,
+          overflowY: 'auto',
+          pr: 2,
+          mr: -2,
+          pb: 2
+        }}>
+          {/* Identificação */}
+          <FilterSectionComponent
+            section={FILTER_SECTIONS[0]}
+            isExpanded={expandedSection === 'identification'}
+            onToggle={() => handleSectionToggle('identification')}
+          >
+            <Stack spacing={2}>
+              <TextField
+                fullWidth
+                label="Palavra-chave"
+                value={localFilters.keyword || ''}
+                onChange={handleTextChange('keyword')}
+                placeholder="Busque por palavras-chave..."
+                size="small"
+              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Escala</InputLabel>
+                <Select
+                  value={localFilters.scale || ''}
+                  onChange={handleSelectChange('scale')}
+                  label="Escala"
+                >
+                  <MenuItem value="">
+                    <em>Qualquer</em>
+                  </MenuItem>
+                  {metadata.scales.map(scale => (
+                    <MenuItem key={scale} value={scale}>
+                      {scale}
                     </MenuItem>
-                    {metadata.scales.map(scale => (
-                      <MenuItem key={scale} value={scale}>
-                        {scale}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Tipo de Produto</InputLabel>
-                  <Select
-                    value={localFilters.productType || ''}
-                    onChange={handleSelectChange('productType')}
-                    label="Tipo de Produto"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl fullWidth size="small">
+                <InputLabel>Tipo de Produto</InputLabel>
+                <Select
+                  value={localFilters.productType || ''}
+                  onChange={handleSelectChange('productType')}
+                  label="Tipo de Produto"
+                >
+                  <MenuItem value="">
+                    <em>Qualquer</em>
+                  </MenuItem>
+                  {metadata.productTypes.map(type => (
+                    <MenuItem key={type} value={type}>
+                      {type}
                     </MenuItem>
-                    {metadata.productTypes.map(type => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            </Grid>
-          </Box>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          </FilterSectionComponent>
 
-          {/* Seção de Localização */}
-          <Box>
-            <Typography 
-              variant="subtitle2" 
-              color="primary"
-              sx={{ 
-                mb: 2,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <FilterListIcon fontSize="small" />
-              Localização
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <FormControl fullWidth>
-                  <InputLabel>Área de Suprimento</InputLabel>
-                  <Select
-                    value={localFilters.supplyArea || ''}
-                    onChange={handleSelectChange('supplyArea')}
-                    label="Área de Suprimento"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
+          {/* Localização */}
+          <FilterSectionComponent
+            section={FILTER_SECTIONS[1]}
+            isExpanded={expandedSection === 'location'}
+            onToggle={() => handleSectionToggle('location')}
+          >
+            <Stack spacing={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Área de Suprimento</InputLabel>
+                <Select
+                  value={localFilters.supplyArea || ''}
+                  onChange={handleSelectChange('supplyArea')}
+                  label="Área de Suprimento"
+                >
+                  <MenuItem value="">
+                    <em>Qualquer</em>
+                  </MenuItem>
+                  {metadata.supplyAreas.map(area => (
+                    <MenuItem key={area} value={area}>
+                      {area}
                     </MenuItem>
-                    {metadata.supplyAreas.map(area => (
-                      <MenuItem key={area} value={area}>
-                        {area}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Estado"
-                  value={localFilters.state || ''}
-                  onChange={handleTextChange('state')}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  label="Município"
-                  value={localFilters.city || ''}
-                  onChange={handleTextChange('city')}
-                />
-              </Grid>
-            </Grid>
-          </Box>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Estado"
+                value={localFilters.state || ''}
+                onChange={handleTextChange('state')}
+                size="small"
+              />
+              <TextField
+                fullWidth
+                label="Município"
+                value={localFilters.city || ''}
+                onChange={handleTextChange('city')}
+                size="small"
+              />
+            </Stack>
+          </FilterSectionComponent>
 
-          {/* Seção de Projeto */}
-          <Box>
-            <Typography 
-              variant="subtitle2" 
-              color="primary"
-              sx={{ 
-                mb: 2,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <FilterListIcon fontSize="small" />
-              Projeto
-            </Typography>
-            <FormControl fullWidth>
+          {/* Projeto */}
+          <FilterSectionComponent
+            section={FILTER_SECTIONS[2]}
+            isExpanded={expandedSection === 'project'}
+            onToggle={() => handleSectionToggle('project')}
+          >
+            <FormControl fullWidth size="small">
               <InputLabel>Projeto</InputLabel>
               <Select
                 value={localFilters.project || ''}
@@ -270,35 +347,26 @@ export default function SearchFilters({ metadata, onSearch }: SearchFiltersProps
                 ))}
               </Select>
             </FormControl>
-          </Box>
+          </FilterSectionComponent>
 
-          {/* Seção de Datas */}
-          <Box>
-            <Typography 
-              variant="subtitle2" 
-              color="primary"
-              sx={{ 
-                mb: 2,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1
-              }}
-            >
-              <CalendarTodayIcon fontSize="small" />
-              Períodos
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
+          {/* Períodos */}
+          <FilterSectionComponent
+            section={FILTER_SECTIONS[3]}
+            isExpanded={expandedSection === 'dates'}
+            onToggle={() => handleSectionToggle('dates')}
+          >
+            <Stack spacing={3}>
+              <Box>
                 <Typography variant="caption" color="text.secondary" gutterBottom>
                   Período de Publicação
                 </Typography>
-                <Grid container spacing={2}>
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
                   <Grid item xs={6}>
                     <DatePicker
                       label="Data Inicial"
                       value={localFilters.publicationPeriod?.start ? dayjs(localFilters.publicationPeriod.start) : null}
                       onChange={handleDateChange('start', 'publicationPeriod')}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                       format="DD/MM/YYYY"
                     />
                   </Grid>
@@ -307,24 +375,24 @@ export default function SearchFilters({ metadata, onSearch }: SearchFiltersProps
                       label="Data Final"
                       value={localFilters.publicationPeriod?.end ? dayjs(localFilters.publicationPeriod.end) : null}
                       onChange={handleDateChange('end', 'publicationPeriod')}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                       format="DD/MM/YYYY"
                     />
                   </Grid>
                 </Grid>
-              </Grid>
+              </Box>
 
-              <Grid item xs={12}>
+              <Box>
                 <Typography variant="caption" color="text.secondary" gutterBottom>
                   Período de Criação
                 </Typography>
-                <Grid container spacing={2}>
+                <Grid container spacing={2} sx={{ mt: 0.5 }}>
                   <Grid item xs={6}>
                     <DatePicker
                       label="Data Inicial"
                       value={localFilters.creationPeriod?.start ? dayjs(localFilters.creationPeriod.start) : null}
                       onChange={handleDateChange('start', 'creationPeriod')}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                       format="DD/MM/YYYY"
                     />
                   </Grid>
@@ -333,42 +401,52 @@ export default function SearchFilters({ metadata, onSearch }: SearchFiltersProps
                       label="Data Final"
                       value={localFilters.creationPeriod?.end ? dayjs(localFilters.creationPeriod.end) : null}
                       onChange={handleDateChange('end', 'creationPeriod')}
-                      slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
                       format="DD/MM/YYYY"
                     />
                   </Grid>
                 </Grid>
-              </Grid>
-            </Grid>
-          </Box>
+              </Box>
+            </Stack>
+          </FilterSectionComponent>
+        </Box>
 
-          {/* Botões de Ação */}
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-            <Button
-              variant="outlined"
-              onClick={clearFilters}
-              startIcon={<ClearIcon />}
-              disabled={isSubmitting}
-            >
-              Limpar
-            </Button>
-            <Button
-              type="submit"
-              variant="contained"
-              startIcon={<SearchIcon />}
-              disabled={isSubmitting}
-            >
-              Buscar
-            </Button>
-          </Box>
+        {/* Footer com Botões */}
+        <Box sx={{ 
+          mt: 2,
+          pt: 2,
+          borderTop: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 1
+        }}>
+          <Button
+            variant="outlined"
+            onClick={clearFilters}
+            startIcon={<ClearIcon />}
+            disabled={isSubmitting}
+            size="small"
+          >
+            Limpar
+          </Button>
+          <Button
+            type="submit"
+            variant="contained"
+            startIcon={isSubmitting ? <CircularProgress size={16} /> : <SearchIcon />}
+            disabled={isSubmitting}
+            size="small"
+          >
+            Buscar
+          </Button>
+        </Box>
 
-          {/* Alerta de BBox */}
-          {state.bbox && (
-            <Alert severity="info" variant="outlined">
-              A busca será limitada à área selecionada no mapa
-            </Alert>
-          )}
-        </Stack>
+        {/* Alerta de BBox */}
+        {state.bbox && (
+          <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
+            A busca será limitada à área selecionada no mapa
+          </Alert>
+        )}
       </Box>
     </LocalizationProvider>
   );

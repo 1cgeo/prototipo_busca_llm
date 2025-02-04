@@ -98,6 +98,7 @@ export interface SearchMetadata {
   limit: number;
   totalPages: number;
   processedQuery?: SearchParams;
+  preprocessedText?: string; // Texto após pré-processamento
 }
 
 export interface QueryResult {

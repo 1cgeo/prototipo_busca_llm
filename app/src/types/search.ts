@@ -132,3 +132,9 @@ export interface SearchState {
   originalQuery?: string;
   bbox?: BoundingBox;
 }
+
+export interface SelectChangeEvent<T = unknown> extends React.ChangeEvent<HTMLSelectElement> {
+  target: HTMLSelectElement & {
+    value: T;
+  };
+}

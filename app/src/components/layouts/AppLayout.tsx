@@ -1,7 +1,16 @@
 import { useState } from 'react';
-import { Box, AppBar, Toolbar, Typography, IconButton, Fade } from '@mui/material';
+import { 
+  Box, 
+  AppBar, 
+  Toolbar, 
+  Typography, 
+  IconButton, 
+  Drawer,
+  useTheme,
+  useMediaQuery,
+  Theme
+} from '@mui/material';
 import { useTheme as useAppTheme } from '@/contexts/ThemeContext';
-import { useSearch } from '@/contexts/SearchContext';
 import MapIcon from '@mui/icons-material/Map';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
@@ -9,12 +18,31 @@ import Map from '@/components/map/Map';
 import SearchPanel from '@/components/search/SearchPanel';
 import ResultsPanel from '@/components/search/ResultsPanel';
 
-const TOOLBAR_HEIGHT = 64; // Altura fixa da toolbar
+const TOOLBAR_HEIGHT = 64;
+const DRAWER_WIDTH = 400;
 
 export default function AppLayout() {
   const { isDarkMode, toggleTheme } = useAppTheme();
-  const { state } = useSearch();
   const [showResults, setShowResults] = useState(false);
+  const [showSearchPanel, setShowSearchPanel] = useState(true);
+  
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+
+  const handleSearch = () => {
+    setShowResults(true);
+    setShowSearchPanel(false);
+  };
+
+  const handleCloseResults = () => {
+    setShowResults(false);
+    setShowSearchPanel(true);
+  };
+
+  const handleNewSearch = () => {
+    setShowResults(false);
+    setShowSearchPanel(true);
+  };
 
   return (
     <Box sx={{ 
@@ -29,8 +57,8 @@ export default function AppLayout() {
       <AppBar 
         position="relative" 
         sx={{ 
-          backgroundColor: theme => theme.palette.background.paper,
-          color: theme => isDarkMode ? 'inherit' : theme.palette.grey[800],
+          backgroundColor: 'background.paper',
+          color: (theme: Theme) => isDarkMode ? theme.palette.text.primary : theme.palette.grey[800],
           zIndex: theme => theme.zIndex.drawer + 1
         }}
         elevation={3}
@@ -40,10 +68,7 @@ export default function AppLayout() {
           <Typography 
             variant="h6" 
             component="div" 
-            sx={{ 
-              flexGrow: 1, 
-              fontWeight: 500
-            }}
+            sx={{ flexGrow: 1, fontWeight: 500 }}
           >
             Protótipo busca por LLM
           </Typography>
@@ -51,7 +76,7 @@ export default function AppLayout() {
           <IconButton 
             onClick={toggleTheme} 
             sx={{ 
-              color: theme => isDarkMode ? 'inherit' : theme.palette.grey[700]
+              color: (theme: Theme) => isDarkMode ? theme.palette.text.primary : theme.palette.grey[700]
             }}
           >
             {isDarkMode ? <Brightness7Icon /> : <Brightness4Icon />}
@@ -59,63 +84,74 @@ export default function AppLayout() {
         </Toolbar>
       </AppBar>
 
-      {/* Mapa Base */}
+      {/* Container Principal */}
       <Box sx={{ 
         position: 'relative',
         flex: 1,
-        height: `calc(100vh - ${TOOLBAR_HEIGHT}px)`
+        height: `calc(100vh - ${TOOLBAR_HEIGHT}px)`,
+        display: 'flex'
       }}>
-        <Map 
-          enableBboxSelection 
-        />
-      </Box>
+        {/* Área do Mapa */}
+        <Box sx={{ 
+          flexGrow: 1,
+          position: 'relative',
+          transition: theme => theme.transitions.create('margin', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
+          ...(showResults && {
+            marginRight: isMobile ? 0 : DRAWER_WIDTH,
+            transition: theme => theme.transitions.create('margin', {
+              easing: theme.transitions.easing.easeOut,
+              duration: theme.transitions.duration.enteringScreen,
+            }),
+          }),
+        }}>
+          <Map enableBboxSelection />
 
-      {/* Container de Painéis */}
-      <Box sx={{
-        position: 'absolute',
-        top: TOOLBAR_HEIGHT,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        pointerEvents: 'none',
-        zIndex: theme => theme.zIndex.drawer + 2
-      }}>
-        {/* Painel de Busca */}
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: 600,
-            mt: 2,
-            px: 2,
-            pointerEvents: 'auto'
-          }}
-        >
-          <SearchPanel 
-            onShowResults={() => setShowResults(true)} 
-          />
+          {/* Painel de Busca Flutuante */}
+          {showSearchPanel && (
+            <Box sx={{
+              position: 'absolute',
+              top: 2,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '100%',
+              maxWidth: 'sm',
+              px: 2,
+              zIndex: 1,
+            }}>
+              <SearchPanel onSearch={handleSearch} />
+            </Box>
+          )}
         </Box>
 
-        {/* Painel de Resultados */}
-        <Box sx={{ flex: 1 }} />
-        <Fade in={showResults && state.results.length > 0}>
-          <Box
-            sx={{
-              width: '100%',
-              maxWidth: 800,
-              mb: 3,
-              px: 2,
-              pointerEvents: 'auto'
-            }}
-          >
-            <ResultsPanel 
-              onClose={() => setShowResults(false)}
-              onNewSearch={() => setShowResults(false)}
-            />
-          </Box>
-        </Fade>
+        {/* Drawer de Resultados */}
+        <Drawer
+          variant={isMobile ? 'temporary' : 'persistent'}
+          anchor={isMobile ? 'bottom' : 'right'}
+          open={showResults}
+          onClose={handleCloseResults}
+          sx={{
+            width: isMobile ? '100%' : DRAWER_WIDTH,
+            flexShrink: 0,
+            '& .MuiDrawer-paper': {
+              width: isMobile ? '100%' : DRAWER_WIDTH,
+              height: isMobile ? '90%' : '100%',
+              boxSizing: 'border-box',
+            },
+          }}
+          PaperProps={{
+            sx: {
+              mt: `${TOOLBAR_HEIGHT}px`
+            }
+          }}
+        >
+          <ResultsPanel 
+            onClose={handleCloseResults}
+            onNewSearch={handleNewSearch}
+          />
+        </Drawer>
       </Box>
     </Box>
   );

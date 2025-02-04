@@ -1,26 +1,35 @@
 import { useState } from 'react';
 import { useSearch } from '@/contexts/SearchContext';
 import { 
-  Paper, 
   Box, 
   Typography, 
   IconButton, 
-  Pagination, 
-  Chip,
   Button,
   Stack,
-  Collapse,
-  Fade,
-  Tooltip,
   CircularProgress,
-  Divider
+  Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Pagination,
+  Paper,
+  Fade,
+  Chip,
+  SelectChangeEvent
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import { structuredSearch } from '@/services/api';
+import SearchFilters from './SearchFilters';
+import EmptyState from '@/components/common/EmptyState';
+import { structuredSearch, getMetadata } from '@/services/api';
+import { useEffect } from 'react';
+import type { MetadataOptions } from '@/types/search';
 
 interface ResultsPanelProps {
   onClose: () => void;
@@ -29,8 +38,30 @@ interface ResultsPanelProps {
 
 export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps) {
   const { state, setResults, setPagination, setLoading, setError } = useSearch();
-  const [expanded, setExpanded] = useState(true);
+  const [expandedAccordion, setExpandedAccordion] = useState<string | false>('results');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
+  const [loadingMetadata, setLoadingMetadata] = useState(false);
+
+  // Carregar metadados ao montar o componente
+  useEffect(() => {
+    const loadMetadata = async () => {
+      if (!metadata) {
+        setLoadingMetadata(true);
+        try {
+          const data = await getMetadata();
+          setMetadata(data);
+        } catch (error) {
+          console.error('Erro ao carregar metadados:', error);
+        } finally {
+          setLoadingMetadata(false);
+        }
+      }
+    };
+
+    loadMetadata();
+  }, [metadata]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
@@ -38,6 +69,13 @@ export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps
       month: 'short',
       year: 'numeric'
     });
+  };
+
+  const handleAccordionChange = (panel: string) => (
+    _: React.SyntheticEvent,
+    isExpanded: boolean
+  ) => {
+    setExpandedAccordion(isExpanded ? panel : false);
   };
 
   const handlePageChange = async (_: unknown, page: number) => {
@@ -66,82 +104,159 @@ export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps
     }
   };
 
+  const handleItemsPerPageChange = (event: SelectChangeEvent<number>) => {
+    const newLimit = Number(event.target.value);
+    setItemsPerPage(newLimit);
+    
+    // Recarregar resultados com novo limite
+    if (state.filters) {
+      handlePageChange(null, 1); // Reset para primeira página com novo limite
+    }
+  };
+
+  const handleFilterSearch = () => {
+    setExpandedAccordion('results');
+  };
+
+  if (!state.results.length) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <EmptyState 
+          type={state.originalQuery ? 'noResults' : 'initial'}
+          action={
+            <Button
+              variant="contained"
+              startIcon={<SearchIcon />}
+              onClick={onNewSearch}
+            >
+              Nova Busca
+            </Button>
+          }
+        />
+      </Box>
+    );
+  }
+
   return (
-    <Paper 
-      elevation={3}
-      sx={{ 
-        borderRadius: 2,
-        overflow: 'hidden',
-        transition: 'all 0.3s ease',
-        backgroundColor: 'background.paper'
-      }}
-    >
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <Box sx={{ 
         p: 2, 
-        display: 'flex', 
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        borderBottom: expanded ? 1 : 0,
+        borderBottom: 1,
         borderColor: 'divider'
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
-            Resultados da Busca
-          </Typography>
-          <Chip 
-            label={`${state.pagination.total} encontrados`}
-            size="small"
-            color="primary"
-          />
-        </Box>
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+              Resultados da Busca
+            </Typography>
+            <Chip 
+              label={`${state.pagination.total} encontrados`}
+              size="small"
+              color="primary"
+            />
+          </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Button
-            size="small"
-            startIcon={<SearchIcon />}
-            onClick={onNewSearch}
-          >
-            Nova Busca
-          </Button>
-          
-          <Tooltip title={expanded ? "Minimizar" : "Expandir"}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              size="small"
+              startIcon={<SearchIcon />}
+              onClick={onNewSearch}
+            >
+              Nova Busca
+            </Button>
+            
             <IconButton 
               size="small"
-              onClick={() => setExpanded(!expanded)}
+              onClick={onClose}
             >
-              {expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+              <CloseIcon />
             </IconButton>
-          </Tooltip>
+          </Box>
+        </Box>
 
-          <IconButton 
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          gap: 2
+        }}>
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel>Por página</InputLabel>
+            <Select
+              value={itemsPerPage}
+              onChange={handleItemsPerPageChange}
+              label="Por página"
+            >
+              <MenuItem value={10}>10</MenuItem>
+              <MenuItem value={20}>20</MenuItem>
+              <MenuItem value={50}>50</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Pagination
+            count={state.pagination.totalPages}
+            page={state.pagination.page}
+            onChange={handlePageChange}
             size="small"
-            onClick={onClose}
-          >
-            <CloseIcon />
-          </IconButton>
+            disabled={isSubmitting}
+          />
         </Box>
       </Box>
 
-      {/* Conteúdo */}
-      <Collapse in={expanded}>
-        <Box sx={{ 
-          p: 2,
-          maxHeight: '60vh',
-          overflowY: 'auto',
-          position: 'relative'
-        }}>
-          {isSubmitting ? (
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'center', 
-              alignItems: 'center',
-              minHeight: 200
-            }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <>
+      {/* Conteúdo com Acordeões */}
+      <Box sx={{ 
+        flex: 1, 
+        overflowY: 'auto',
+        px: 2,
+        py: 1
+      }}>
+        {/* Acordeão de Filtros */}
+        <Accordion
+          expanded={expandedAccordion === 'filters'}
+          onChange={handleAccordionChange('filters')}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Filtros Avançados</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {metadata && !loadingMetadata ? (
+              <SearchFilters 
+                metadata={metadata}
+                onSearch={handleFilterSearch}
+                variant="drawer"
+              />
+            ) : (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
+        {/* Acordeão de Resultados */}
+        <Accordion
+          expanded={expandedAccordion === 'results'}
+          onChange={handleAccordionChange('results')}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>Resultados</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {isSubmitting ? (
+              <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                py: 4
+              }}>
+                <CircularProgress />
+              </Box>
+            ) : (
               <Stack spacing={2}>
                 {state.results.map((result, index) => (
                   <Fade 
@@ -213,55 +328,27 @@ export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps
                   </Fade>
                 ))}
               </Stack>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      </Box>
 
-              {/* Paginação */}
-              {state.pagination.totalPages > 1 && (
-                <Box sx={{ 
-                  mt: 3, 
-                  pt: 2,
-                  display: 'flex',
-                  justifyContent: 'center',
-                  borderTop: 1,
-                  borderColor: 'divider'
-                }}>
-                  <Pagination
-                    count={state.pagination.totalPages}
-                    page={state.pagination.page}
-                    onChange={handlePageChange}
-                    disabled={isSubmitting}
-                    color="primary"
-                    size="large"
-                    showFirstButton
-                    showLastButton
-                    sx={{ 
-                      '.MuiPaginationItem-root': {
-                        fontSize: '0.875rem'
-                      }
-                    }}
-                  />
-                </Box>
-              )}
-            </>
-          )}
-        </Box>
-      </Collapse>
-
-      {/* Indicador de BBox */}
+      {/* Footer com BBox */}
       {state.bbox && (
-        <Divider />
+        <>
+          <Divider />
+          <Box sx={{ 
+            px: 2, 
+            py: 1,
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            fontSize: '0.875rem',
+            textAlign: 'center'
+          }}>
+            Resultados filtrados pela área selecionada no mapa
+          </Box>
+        </>
       )}
-      {state.bbox && (
-        <Box sx={{ 
-          px: 2, 
-          py: 1,
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          fontSize: '0.875rem',
-          textAlign: 'center'
-        }}>
-          Resultados filtrados pela área selecionada no mapa
-        </Box>
-      )}
-    </Paper>
+    </Box>
   );
 }
