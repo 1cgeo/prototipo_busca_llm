@@ -1,4 +1,9 @@
+import { z } from 'zod';
+import Instructor from '@instructor-ai/instructor';
+import OpenAI from 'openai';
 import { logger } from '../../utils/logger.js';
+import { fallbackExtraction } from './utils.js';
+import { validateExtractedParams } from './validator.js';
 import {
   SCALES,
   PRODUCT_TYPES,
@@ -6,170 +11,249 @@ import {
   PROJECTS,
   SORT_FIELDS,
   SORT_DIRECTIONS,
+  type NaturalLanguageQuery,
 } from '../../types/api.js';
 import { preprocessQuery } from './preprocessor.js';
-import { validateLLMResponse } from './validator.js';
-import { fallbackExtraction } from './utils.js';
-import type {
-  SearchParams,
-  NaturalLanguageQuery,
-  OllamaApiResponse,
-} from '../../types/api.js';
+
+// Schema otimizado para extração de parâmetros
+const DateRange = z.object({
+  start: z.string().describe('Data inicial em formato ISO YYYY-MM-DD'),
+  end: z.string().describe('Data final em formato ISO YYYY-MM-DD'),
+});
+
+const ExtractedSearchParams = z
+  .object({
+    reasoning: z
+      .string()
+      .describe(
+        'Explique passo a passo como cada parâmetro foi extraído, mencionando quais termos do texto original levaram a cada decisão',
+      ),
+
+    keyword: z
+      .union([z.string(), z.undefined(), z.null()])
+      .describe(
+        'Palavras-chave significativas para busca textual. Extrair apenas quando houver termos claramente relevantes para busca, ignorando palavras comuns como "mapa", "carta", "preciso", etc.',
+      ),
+
+    scale: z.union([z.enum(SCALES), z.undefined(), z.null()])
+      .describe(`Escala do mapa. Aceitar variações e normalizar: Grande escala = 1:25.000, Média escala = 1:100.000, Pequena escala = 1:250.000, Normalizar formatos: 25k, 25.000, 25000, 1/25.000 em 1:25.000, Se múltiplas escalas forem mencionadas, priorizar a maior (mais detalhada)`),
+
+    productType: z.union([z.enum(PRODUCT_TYPES), z.undefined(), z.null()])
+      .describe(`Tipo de produto cartográfico. Interpretações comuns: "mapa" ou "carta" sem qualificador = "Carta Topográfica",  Menção a imagem/satélite = "Carta Ortoimagem", Mencão a temático = "Carta Temática"`),
+    state: z
+      .union([z.string(), z.undefined(), z.null()])
+      .describe(
+        'Nome completo do estado brasileiro. Converter siglas (ex: RJ para Rio de Janeiro). Se múltiplos estados forem mencionados, usar o primeiro.',
+      ),
+
+    city: z
+      .union([z.string(), z.undefined(), z.null()])
+      .describe(
+        'Nome do município brasileiro. Se múltiplos municípios forem mencionados, usar o primeiro. Preservar acentuação.',
+      ),
+
+    supplyArea: z.union([z.enum(SUPPLY_AREAS), z.undefined(), z.null()])
+    .describe(
+      'Centro de Geoinformação responsável. Converter siglas para o nome completo.',
+    ),
+
+    project: z.union([z.enum(PROJECTS), z.undefined(), z.null()])
+      .describe(`Projeto específico. Normalizar variações comuns: "copa" para "Copa do Mundo 2014", "olimpiadas/olimpíadas" para "Olimpíadas"`),
+
+    publicationPeriod: z.union([DateRange, z.undefined(), z.null()])
+    .describe(
+      'Período de publicação. "recente"=últimos 6 meses, "esse ano"=ano atual',
+    ),
+
+    creationPeriod: z
+      .union([DateRange, z.undefined(), z.null()])
+      .describe('Período de criação do produto'),
+
+
+    sortField: z.enum(SORT_FIELDS).default('publicationDate')
+    .describe(
+      'Campo para ordenação. Usar "publicationDate" se não especificado',
+    ),
+
+    sortDirection: z
+      .union([z.enum(SORT_DIRECTIONS), z.undefined(), z.null()])
+      .default('DESC')      
+      .describe(
+        'Direção da ordenação. Usar "DESC" (mais recente) se não especificado',
+      ),
+
+    limit: z
+      .union([z.number().min(1).max(100), z.undefined(), z.null()])
+      .describe(
+        'Número máximo de resultados. Extrair apenas números explicitamente mencionados entre 1 e 100.',
+      ),
+  })
+  .describe(
+    'Parâmetros de busca extraídos da consulta em linguagem natural. Sempre priorizar exatidão sobre completude.',
+  );
 
 export class LLMService {
-  constructor(private readonly baseUrl: string) {}
+  private client: OpenAI;
 
-  async processQuery(query: NaturalLanguageQuery): Promise<{
-    searchParams: SearchParams;
-    preprocessedText: string;
-  }> {
+  constructor(baseUrl: string) {
+    const oai = new OpenAI({
+      baseURL: baseUrl + '/v1',
+      apiKey: 'ollama',
+    });
+    this.client = Instructor({
+      client: oai,
+      mode: 'JSON_SCHEMA',
+    });
+  }
+
+  async processQuery(query: NaturalLanguageQuery) {
     // Pré-processa a query
     const preprocessedText = preprocessQuery(query.query);
+    let extractedParams = {};
 
     try {
-      // Tenta obter resposta da LLM
-      const llmResponse = await this.callLLM(preprocessedText);
+      // Gera o prompt para o modelo
+      const systemPrompt = this.buildPrompt();
 
-      // Valida e extrai campos válidos
-      const searchParams = validateLLMResponse(llmResponse);
-
-      // Se não obteve nenhum parâmetro válido, vai para fallback
-      if (Object.keys(searchParams).length === 0) {
-        logger.info('No valid parameters from LLM, using fallback', {
-          originalQuery: query.query,
-          preprocessedText,
-        });
-        return {
-          searchParams: fallbackExtraction(preprocessedText),
-          preprocessedText,
-        };
-      }
-
-      return { searchParams, preprocessedText };
-    } catch (error) {
-      // Qualquer erro no processo leva ao fallback
-      logger.warn('Error in LLM processing, using fallback', {
-        error,
-        originalQuery: query.query,
-        preprocessedText,
+      // Faz a chamada usando Instructor
+      const extraction = await (this.client.chat.completions.create as any)({
+        model: 'qwen2.5-coder:7b',
+        temperature: 0.6,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: preprocessedText },
+        ],
+        response_model: {
+          schema: ExtractedSearchParams,
+          name: 'ExtractedSearchParams',
+        },
+        max_retries: 3,
       });
 
-      return {
-        searchParams: fallbackExtraction(preprocessedText),
+      logger.info('LLM extraction successful', {
+        originalQuery: query.query,
         preprocessedText,
-      };
+        extractedParams: extraction,
+      });
+      extractedParams = extraction;
+    } catch (error) {
+      logger.warn('LLM extraction failed, using fallback', {
+        error,
+        query: query.query,
+      });
+
+      // Em caso de falha, usa fallback
+      extractedParams = fallbackExtraction(preprocessedText);
     }
-  }
 
-  private async callLLM(processedQuery: string): Promise<string> {
-    const prompt = this.buildPrompt(processedQuery);
+    const validatedParams = validateExtractedParams(extractedParams);
 
-    const response = await fetch(`${this.baseUrl}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        model: 'deepseek-r1:1.5b',
-        temperature: 0.6,
-        max_tokens: 1000,
-        stream: false,
-      }),
+    logger.info('Query processing complete', {
+      originalQuery: query.query,
+      preprocessedText,
+      finalParams: validatedParams,
     });
 
-    if (!response.ok) {
-      throw new Error(`LLM request failed: ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as OllamaApiResponse;
-    return data.response;
+    return { searchParams: validatedParams, preprocessedText };
   }
 
-  private buildPrompt(query: string): string {
+  private buildPrompt(): string {
     const today = new Date().toISOString().split('T')[0];
-    const scalesStr = SCALES.map(e => `"${e}"`).join(', ');
-    const productTypesStr = PRODUCT_TYPES.map(t => `"${t}"`).join(', ');
-    const supplyAreasStr = SUPPLY_AREAS.map(a => `"${a}"`).join(', ');
-    const projectsStr = PROJECTS.map(p => `"${p}"`).join(', ');
-    const sortFieldsStr = SORT_FIELDS.map(f => `"${f}"`).join(', ');
-    const sortDirectionsStr = SORT_DIRECTIONS.map(d => `"${d}"`).join(', ');
 
-    return `You are a specialized system for processing cartographic data queries. Your task is to convert natural language queries in Portuguese into structured JSON format.
+    return `Você é um especialista em extrair parâmetros estruturados de consultas sobre dados cartográficos em português.
 
-Query in Portuguese: "${query}"
+Data atual: ${today}
 
-Current date: ${today}
+Para cada consulta, faça as seguintes perguntas:
 
-First, analyze the query by answering these questions (think step by step):
+1. MÚLTIPLOS VALORES
+- Há múltiplas escalas mencionadas?
+  Escolha a mais detalhada (menor denominador)
+  Exemplo: "25k ou 50k" use 1:25.000
 
-1. Scale:
-- Is there any mention of scale (escala)?
-- Check for: "1:25.000", "25k", "grande escala", etc.
-- Remember: "grande escala" = 1:25.000, "média" = 1:100.000, "pequena" = 1:250.000
-- Valid scales: ${scalesStr}
+- Há múltiplos estados/cidades?
+  Use o primeiro mencionado
+  Exemplo: "mapas de SP e RJ" use São Paulo
 
-2. Product Type:
-- What type of cartographic product is requested?
-- Check for: "carta topográfica", "carta ortoimagem", "mapa", etc.
-- Remember: "mapa" = "carta"
-- Valid types: ${productTypesStr}
+- Há múltiplos CGEOs?
+  Use o primeiro mencionado
+  Exemplo: "primeiro e segundo cgeo" use 1° Centro de Geoinformação
 
-3. Geographic Location:
-- Any mention of Brazilian states or cities?
-- Check state abbreviations (RJ = Rio de Janeiro)
-- Check city names
+2. LOCALIZAÇÃO (Estado e Cidade)
+Para cada localidade mencionada, pergunte:
+- É um estado ou cidade?
+- Se é sigla, qual o nome completo?
+- Se menciona cidade, qual seu estado?
+Tente identificar tanto estado quanto cidade quando possível:
+- "Rio" para state: "Rio de Janeiro"
+- "Salvador" para city: "Salvador", state: "Bahia"
+- "Cuiabá, MT" para city: "Cuiabá", state: "Mato Grosso"
 
-4. Supply Area:
-- Any mention of CGEO/Centro de Geoinformação?
-- Check patterns: "1º CGEO", "2° CGEO", etc.
-- Valid areas: ${supplyAreasStr}
+3. PRIORIZAÇÃO DE VALORES
+Para cada menção temporal, pergunte:
+- É sobre publicação ou criação?
+- É uma data específica ou período relativo?
+- Qual a data mais relevante se houver múltiplas?
 
-5. Project:
-- Any mention of specific projects?
-- Check variations: "copa" = "Copa do Mundo 2014"
-- Valid projects: ${projectsStr}
+Para cada menção de ordenação, pergunte:
+- É sobre data de criação ou publicação?
+- Indica mais recente ou mais antigo?
+- Qual o critério principal se houver múltiplos?
 
-6. Time Period:
-- Any temporal references?
-- Check for: "último ano", "recente", "publicado em"
-- Convert relative dates using current date
+4. INFERÊNCIA DE VALORES
+Pergunte para termos implícitos:
+- "detalhado" ou "preciso" para scale: "1:25.000"
+- "visão geral" para scale: "1:250.000"
+- "satélite" ou "imagem" para productType: "Carta Ortoimagem"
+- "curvas de nível" para productType: "Carta Topográfica"
+- "recente" para sortDirection: "DESC" + últimos 6 meses
+- "alguns" para limit: 5
+- "todos" para não definir limite
 
-7. Sorting & Quantity:
-- Any mention of ordering or limits?
-- Check for: "mais recente", "mais antigo", "primeiros 20"
-- Valid sort fields: ${sortFieldsStr}
-- Valid directions: ${sortDirectionsStr}
+Exemplos de inferências corretas:
 
-Example of complex query processing:
-Query: "Preciso de 20 cartas topográficas 1:25.000 do 2° CGEO publicadas em 2023 ordenadas por data de criação mais antiga"
-\`\`\`json
+1. Query: "mapas detalhados de Manaus e Belém"
 {
-  "productType": "Carta Topográfica",
+  "reasoning": "- Localização: múltiplas cidades, usando a primeira (Manaus/AM) - 'detalhados' indica escala 1:25.000 - 'mapas' indica Carta Topográfica",
   "scale": "1:25.000",
-  "supplyArea": "2° Centro de Geoinformação",
-  "publicationPeriod": {
-    "start": "2023-01-01",
-    "end": "2023-12-31"
-  },
-  "sortField": "creationDate",
-  "sortDirection": "ASC",
-  "limit": 20
+  "city": "Manaus",
+  "state": "Amazonas",
+  "productType": "Carta Topográfica"
 }
-\`\`\`
 
-Essential Rules:
-1. Include ONLY explicitly mentioned or strongly implied fields
-2. For dates: "recente" = last 6 months, "esse ano" = current year
-3. Use EXACT values from provided valid options
-4. When in doubt, omit the field
-5. Response must be ONLY JSON between triple backticks
-
-Format response EXACTLY like this:
-\`\`\`json
+2. Query: "cartas do Rio publicadas esse ano"
 {
-  // only fields found in the query
+  "reasoning": "- Localização: 'Rio' é ambíguo, mas comum referir-se ao estado- 'esse ano' refere-se a publicação em 2025 - 'cartas' sem qualificador indica Carta Topográfica",
+  "state": "Rio de Janeiro",
+  "productType": "Carta Topográfica",
+  "publicationPeriod": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  }
 }
-\`\`\``;
+
+3. Query: "imagens recentes de Curitiba e região"
+{
+  "reasoning": "- Localização: Curitiba/PR identificados - 'imagens' indica Carta Ortoimagem - 'recentes' implica últimos 6 meses e ordenação DESC",
+  "city": "Curitiba",
+  "state": "Paraná",
+  "productType": "Carta Ortoimagem",
+  "publicationPeriod": {
+    "start": "2024-08-04",
+    "end": "2025-02-04"
+  },
+  "sortField": "publicationDate",
+  "sortDirection": "DESC"
 }
+
+Ao analisar cada consulta:
+1. Primeiro identifique todos os valores mencionados
+2. Resolva casos de múltiplos valores usando as regras de priorização
+3. Verifique relações entre cidade/estado
+4. Infira valores implícitos com alta confiança
+5. Documente seu raciocínio explicando cada decisão`;
+  }
 }
 
 export default LLMService;
+export type { ExtractedSearchParams };

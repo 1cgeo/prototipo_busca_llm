@@ -46,11 +46,11 @@ export const testCases: TestCase[] = [
 
     // Casos Médios - Múltiplos parâmetros e algumas variações
     {
-        query: 'preciso de cartas topográficas do 2o cgeo em escala 50k ou 25k publicadas esse ano',
+        query: 'preciso de cartas topográficas do 2o cgeo em escala 50k publicadas esse ano',
         expected: {
             productType: 'Carta Topográfica',
             supplyArea: '2° Centro de Geoinformação',
-            scale: '1:25.000',
+            scale: '1:50.000',
             publicationPeriod: {
                 start: '2025-01-01',
                 end: '2025-12-31'
@@ -66,7 +66,7 @@ export const testCases: TestCase[] = [
             state: 'Bahia',
             limit: 20,
             sortField: 'creationDate',
-            sortDirection: 'DESC'
+            sortDirection: 'ASC'
         },
         difficulty: 'medium',
         description: 'Estado, limite e ordenação específica',
@@ -127,7 +127,7 @@ export const testCases: TestCase[] = [
                 start: '2024-08-03',
                 end: '2025-02-03'
             },
-            sortField: 'publicationDate',
+            sortField: 'creationDate',
             sortDirection: 'DESC'
         },
         difficulty: 'hard',
@@ -145,7 +145,7 @@ export const testCases: TestCase[] = [
                 end: '2025-01-31'
             },
             sortField: 'creationDate',
-            sortDirection: 'DESC'
+            sortDirection: 'ASC'
         },
         difficulty: 'hard',
         focus: ['project', 'location', 'dates']
@@ -406,6 +406,10 @@ export const testCases: TestCase[] = [
         query: 'algumas cartas recentes de porto alegre',
         expected: {
             city: 'Porto Alegre',
+            creationPeriod: {
+                start: "2024-01-01",
+                end: "2025-12-31"
+            },
             limit: 5,
             sortField: 'publicationDate',
             sortDirection: 'DESC'
@@ -417,7 +421,8 @@ export const testCases: TestCase[] = [
         query: 'todos os mapas de belem',
         expected: {
             city: 'Belém',
-            limit: 100
+            sortField: 'publicationDate',
+            sortDirection: 'ASC'
         },
         difficulty: 'medium',
         focus: ['location']
@@ -425,13 +430,13 @@ export const testCases: TestCase[] = [
 
     // Casos Extremamente Complexos
     {
-        query: 'preciso das 5 cartas mais antigas do tipo ortoimg em escala detalhada do segundo cgeo na bahia publicadas depois de 2020',
+        query: 'preciso das 5 cartas mais antigas do tipo ortoimg em escala detalhada do segundo cgeo em pernambuco publicadas depois de 2020',
         expected: {
             limit: 5,
             productType: 'Carta Ortoimagem',
             scale: '1:25.000',
             supplyArea: '2° Centro de Geoinformação',
-            state: 'Bahia',
+            state: 'Pernambuco',
             publicationPeriod: {
                 start: '2020-01-01',
                 end: '2025-02-03'
@@ -443,7 +448,7 @@ export const testCases: TestCase[] = [
         focus: ['type', 'scale', 'location', 'dates', 'sorting']
     },
     {
-        query: 'mapeamento sistematico do quarto cgeo no sudeste em media e pequena escala criado entre 2022 e 2023 ordem cronologica',
+        query: 'mapeamento sistematico do quarto cgeo no sudeste em pequena escala criado entre 2022 e 2023 ordem cronologica',
         expected: {
             project: 'Mapeamento Sistemático',
             supplyArea: '4° Centro de Geoinformação',

@@ -10,32 +10,6 @@ import {
 } from '../../types/api.js';
 
 /**
- * Calcula a distância de Levenshtein entre duas strings
- */
-export function levenshteinDistance(str1: string, str2: string): number {
-  const m = str1.length;
-  const n = str2.length;
-  const dp: number[][] = Array(m + 1)
-    .fill(null)
-    .map(() => Array(n + 1).fill(0));
-
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (str1[i - 1] === str2[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1];
-      } else {
-        dp[i][j] = 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-      }
-    }
-  }
-
-  return dp[m][n];
-}
-
-/**
  * Normaliza uma string removendo acentos e caracteres especiais
  */
 export function normalizeString(str: string): string {
@@ -47,43 +21,8 @@ export function normalizeString(str: string): string {
 }
 
 /**
- * Encontra a string mais próxima em uma lista de opções válidas
+ * Extração de parâmetros fallback quando a LLM falha
  */
-export function findClosestMatch(
-  value: string,
-  validOptions: readonly string[],
-): string | undefined {
-  if (validOptions.includes(value)) {
-    return value;
-  }
-
-  const normalizedValue = normalizeString(value);
-  const normalizedOptions = validOptions.map(opt => ({
-    original: opt,
-    normalized: normalizeString(opt),
-  }));
-
-  let bestMatch = undefined;
-  let minDistance = Infinity;
-  const maxAllowedDistance = Math.floor(normalizedValue.length * 0.3);
-
-  for (const option of normalizedOptions) {
-    const distance = levenshteinDistance(normalizedValue, option.normalized);
-    const maxLength = Math.max(
-      normalizedValue.length,
-      option.normalized.length,
-    );
-    const score = 1 - distance / maxLength;
-
-    if (distance < minDistance && score >= 0.7) {
-      minDistance = distance;
-      bestMatch = option.original;
-    }
-  }
-
-  return minDistance <= maxAllowedDistance ? bestMatch : undefined;
-}
-
 export function fallbackExtraction(text: string): SearchParams {
   const result: Partial<SearchParams> = {};
 
@@ -155,32 +94,9 @@ export function fallbackExtraction(text: string): SearchParams {
   return result as SearchParams;
 }
 
-function extractDateRanges(text: string) {
-  const result: {
-    publication?: { start: string; end: string };
-    creation?: { start: string; end: string };
-  } = {};
-
-  // Implementar extração de datas baseada em expressões comuns
-  // Ex: "último ano", "desde 2020", "entre 2019 e 2020"
-  // Esta é uma implementação básica que pode ser expandida
-
-  const currentDate = new Date();
-
-  if (/último ano|ultimo ano/i.test(text)) {
-    const lastYear = new Date();
-    lastYear.setFullYear(currentDate.getFullYear() - 1);
-    result.publication = {
-      start: lastYear.toISOString().split('T')[0],
-      end: currentDate.toISOString().split('T')[0],
-    };
-  }
-
-  // Adicionar mais padrões de data conforme necessário
-
-  return result;
-}
-
+/**
+ * Verifica se um projeto é válido
+ */
 function isValidProject(project: string): boolean {
   return [
     'Rondônia',
@@ -193,4 +109,107 @@ function isValidProject(project: string): boolean {
     'Olimpíadas',
     'Copa das Confederações 2013',
   ].includes(project);
+}
+
+/**
+ * Extrai ranges de data de um texto
+ */
+function extractDateRanges(text: string) {
+  const result: {
+    publication?: { start: string; end: string };
+    creation?: { start: string; end: string };
+  } = {};
+
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+
+  // Expressões de tempo relativas
+  if (/últim[oa]s?\s+6\s+meses|ultim[oa]s?\s+6\s+meses/i.test(text)) {
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(currentMonth - 6);
+    result.publication = {
+      start: sixMonthsAgo.toISOString().split('T')[0],
+      end: currentDate.toISOString().split('T')[0],
+    };
+  } else if (/últim[oa]s?\s+3\s+meses|ultim[oa]s?\s+3\s+meses/i.test(text)) {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(currentMonth - 3);
+    result.publication = {
+      start: threeMonthsAgo.toISOString().split('T')[0],
+      end: currentDate.toISOString().split('T')[0],
+    };
+  } else if (/esse ano|este ano/i.test(text)) {
+    result.publication = {
+      start: `${currentYear}-01-01`,
+      end: `${currentYear}-12-31`,
+    };
+  } else if (/ano passado|último ano|ultim[oa] ano/i.test(text)) {
+    result.publication = {
+      start: `${currentYear - 1}-01-01`,
+      end: `${currentYear - 1}-12-31`,
+    };
+  }
+
+  // Expressões de períodos específicos
+  const yearMatch = text.match(/em (\d{4})/i);
+  if (yearMatch) {
+    const year = parseInt(yearMatch[1]);
+    if (year >= 2000 && year <= currentYear) {
+      result.publication = {
+        start: `${year}-01-01`,
+        end: `${year}-12-31`,
+      };
+    }
+  }
+
+  // Período entre anos
+  const yearRangeMatch = text.match(/entre (\d{4})\s+e\s+(\d{4})/i);
+  if (yearRangeMatch) {
+    const startYear = parseInt(yearRangeMatch[1]);
+    const endYear = parseInt(yearRangeMatch[2]);
+    if (startYear <= endYear && endYear <= currentYear) {
+      result.publication = {
+        start: `${startYear}-01-01`,
+        end: `${endYear}-12-31`,
+      };
+    }
+  }
+
+  // Último trimestre
+  if (/últim[oa] trimestre|ultim[oa] trimestre/i.test(text)) {
+    const startQuarter = new Date();
+    startQuarter.setMonth(currentMonth - 3);
+    result.publication = {
+      start: startQuarter.toISOString().split('T')[0],
+      end: currentDate.toISOString().split('T')[0],
+    };
+  }
+
+  // Último semestre
+  if (/últim[oa] semestre|ultim[oa] semestre/i.test(text)) {
+    const startSemester = new Date();
+    startSemester.setMonth(currentMonth - 6);
+    result.publication = {
+      start: startSemester.toISOString().split('T')[0],
+      end: currentDate.toISOString().split('T')[0],
+    };
+  }
+
+  // Primeiro/segundo semestre de um ano específico
+  const semesterMatch = text.match(
+    /(primeir[oa]|segund[oa]) semestre (?:de )?(\d{4})/i,
+  );
+  if (semesterMatch) {
+    const year = parseInt(semesterMatch[2]);
+    if (year >= 2000 && year <= currentYear) {
+      const isFirstSemester = /primeir[oa]/i.test(semesterMatch[1]);
+      result.publication = {
+        start: `${year}-${isFirstSemester ? '01' : '07'}-01`,
+        end: `${year}-${isFirstSemester ? '06' : '12'}-${isFirstSemester ? '30' : '31'}`,
+      };
+    }
+  }
+
+  return result;
 }

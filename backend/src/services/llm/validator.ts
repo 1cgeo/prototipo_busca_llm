@@ -1,5 +1,5 @@
 import { logger } from '../../utils/logger.js';
-import { findClosestMatch } from './utils.js';
+import type { SearchParams } from '../../types/api.js';
 import {
   SCALES,
   PRODUCT_TYPES,
@@ -7,146 +7,108 @@ import {
   PROJECTS,
   SORT_FIELDS,
   SORT_DIRECTIONS,
-  type Scale,
-  type ProductType,
-  type SupplyArea,
-  type Project,
-  type SortField,
-  type SortDirection,
-  type SearchParams,
 } from '../../types/api.js';
 
-export function validateLLMResponse(response: string): SearchParams {
+export function validateExtractedParams(
+  params: Record<string, any>,
+): SearchParams {
+  const validatedParams: Partial<SearchParams> = {};
+
   try {
-    // Remove blocos think/thought
-    response = response.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    response = response.replace(/<thought>[\s\S]*?<\/thought>/gi, '');
+    // Validação de campos simples string/number
+    if (typeof params.keyword === 'string') {
+      validatedParams.keyword = params.keyword;
+    }
 
-    // Tenta extrair JSON da resposta
-    const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/);
-    const jsonString = jsonMatch ? jsonMatch[1] : response;
-    const cleanJson = jsonString.replace(/,(\s*[}\]])/g, '$1');
+    if (typeof params.state === 'string') {
+      validatedParams.state = params.state;
+    }
 
-    // Parse do JSON
-    const parsedJson = JSON.parse(cleanJson);
+    if (typeof params.city === 'string') {
+      validatedParams.city = params.city;
+    }
 
-    return extractValidFields(parsedJson);
-  } catch (error) {
-    logger.warn(
-      'Failed to parse LLM response JSON, falling back to text analysis',
+    // Validação de enums
+    if (params.scale && SCALES.includes(params.scale)) {
+      validatedParams.scale = params.scale;
+    }
+
+    if (params.productType && PRODUCT_TYPES.includes(params.productType)) {
+      validatedParams.productType = params.productType;
+    }
+
+    if (params.supplyArea && SUPPLY_AREAS.includes(params.supplyArea)) {
+      validatedParams.supplyArea = params.supplyArea;
+    }
+
+    if (params.project && PROJECTS.includes(params.project)) {
+      validatedParams.project = params.project;
+    }
+
+    // Validação de campos de ordenação
+    if (params.sortField && SORT_FIELDS.includes(params.sortField)) {
+      validatedParams.sortField = params.sortField;
+    } else {
+      validatedParams.sortField = 'publicationDate'; // valor default
+    }
+
+    if (
+      params.sortDirection &&
+      SORT_DIRECTIONS.includes(params.sortDirection)
+    ) {
+      validatedParams.sortDirection = params.sortDirection;
+    } else {
+      validatedParams.sortDirection = 'DESC'; // valor default
+    }
+
+    // Validação do limite
+    if (
+      typeof params.limit === 'number' &&
+      params.limit > 0 &&
+      params.limit <= 100
+    ) {
+      validatedParams.limit = params.limit;
+    }
+
+    // Validação de períodos de data
+    if (params.publicationPeriod) {
+      if (isValidDatePeriod(params.publicationPeriod)) {
+        validatedParams.publicationPeriod = params.publicationPeriod;
+      }
+    }
+
+    if (params.creationPeriod) {
+      if (isValidDatePeriod(params.creationPeriod)) {
+        validatedParams.creationPeriod = params.creationPeriod;
+      }
+    }
+
+    logger.debug(
       {
-        error,
-        response,
+        stage: 'params_validation',
+        input: params,
+        output: validatedParams,
       },
+      'Parameters validation complete',
     );
 
-    // Se falhar o parse, retorna objeto vazio que será tratado pelo fallback
-    return {} as SearchParams;
-  }
-}
+    return validatedParams as SearchParams;
+  } catch (error) {
+    logger.error(
+      {
+        stage: 'params_validation',
+        error,
+        params,
+      },
+      'Error validating parameters',
+    );
 
-function extractValidFields(data: Record<string, any>): SearchParams {
-  const result: Partial<SearchParams> = {};
-
-  // Validar e extrair campos válidos
-  if (typeof data.keyword === 'string') {
-    result.keyword = data.keyword;
+    // Em caso de erro, retorna objeto com valores default mínimos
+    return {
+      sortField: 'publicationDate',
+      sortDirection: 'DESC',
+    } as SearchParams;
   }
-
-  // Escala com aproximação
-  if (data.scale) {
-    const matchedScale = findClosestMatch(data.scale.toString(), SCALES) as
-      | Scale
-      | undefined;
-    if (matchedScale) {
-      result.scale = matchedScale;
-    }
-  }
-
-  // Tipo de produto com aproximação
-  if (data.productType) {
-    const matchedType = findClosestMatch(
-      data.productType.toString(),
-      PRODUCT_TYPES,
-    ) as ProductType | undefined;
-    if (matchedType) {
-      result.productType = matchedType;
-    }
-  }
-
-  // Estado e cidade (strings simples)
-  if (typeof data.state === 'string') {
-    result.state = data.state;
-  }
-  if (typeof data.city === 'string') {
-    result.city = data.city;
-  }
-
-  // Área de suprimento com aproximação
-  if (data.supplyArea) {
-    const matchedArea = findClosestMatch(
-      data.supplyArea.toString(),
-      SUPPLY_AREAS,
-    ) as SupplyArea | undefined;
-    if (matchedArea) {
-      result.supplyArea = matchedArea;
-    }
-  }
-
-  // Projeto com aproximação
-  if (data.project) {
-    const matchedProject = findClosestMatch(
-      data.project.toString(),
-      PROJECTS,
-    ) as Project | undefined;
-    if (matchedProject) {
-      result.project = matchedProject;
-    }
-  }
-
-  // Períodos de data
-  if (isValidDatePeriod(data.publicationPeriod)) {
-    result.publicationPeriod = data.publicationPeriod;
-  }
-  if (isValidDatePeriod(data.creationPeriod)) {
-    result.creationPeriod = data.creationPeriod;
-  }
-
-  // Campos de ordenação com aproximação
-  if (data.sortField) {
-    const matchedField = findClosestMatch(
-      data.sortField.toString(),
-      SORT_FIELDS,
-    ) as SortField | undefined;
-    if (matchedField) {
-      result.sortField = matchedField;
-    }
-  }
-
-  if (data.sortDirection) {
-    const matchedDirection = findClosestMatch(
-      data.sortDirection.toString(),
-      SORT_DIRECTIONS,
-    ) as SortDirection | undefined;
-    if (matchedDirection) {
-      result.sortDirection = matchedDirection;
-    }
-  }
-
-  // Limite numérico
-  if (typeof data.limit === 'number' && data.limit > 0 && data.limit <= 100) {
-    result.limit = data.limit;
-  }
-
-  // Adiciona valores default se não existirem
-  if (!result.sortField) {
-    result.sortField = 'publicationDate';
-  }
-  if (!result.sortDirection) {
-    result.sortDirection = 'DESC';
-  }
-
-  return result as SearchParams;
 }
 
 function isValidDatePeriod(period: any): boolean {
@@ -155,6 +117,11 @@ function isValidDatePeriod(period: any): boolean {
   const { start, end } = period;
   if (!start || !end) return false;
 
+  // Validação do formato da data (YYYY-MM-DD)
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(start) || !dateRegex.test(end)) return false;
+
+  // Validação de datas válidas
   const startDate = new Date(start);
   const endDate = new Date(end);
 

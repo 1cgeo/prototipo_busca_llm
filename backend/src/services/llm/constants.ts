@@ -69,19 +69,6 @@ export const COMMON_TERMS: Record<string, string> = {
   '250 k': '1:250.000',
   '250.000': '1:250.000',
   '250000': '1:250.000',
-  // Descrições de escala
-  'grande escala': '1:25.000',
-  'maior escala': '1:25.000',
-  'escala grande': '1:25.000',
-  'escala maior': '1:25.000',
-  'media escala': '1:100.000',
-  'média escala': '1:100.000',
-  'escala media': '1:100.000',
-  'escala média': '1:100.000',
-  'pequena escala': '1:250.000',
-  'menor escala': '1:250.000',
-  'escala pequena': '1:250.000',
-  'escala menor': '1:250.000',
 
   // Abreviações de tipos de produto
   'carta topo': 'Carta Topográfica',
@@ -95,30 +82,18 @@ export const COMMON_TERMS: Record<string, string> = {
   'carta temática': 'Carta Temática',
   'cartas tematicas': 'Carta Temática',
   'cartas temáticas': 'Carta Temática',
+  'imagem satélite': 'Carta Ortoimagem',
+  'imagem de satélite': 'Carta Ortoimagem',
+  'imagem por satélite': 'Carta Ortoimagem',
   'imagem satelite': 'Carta Ortoimagem',
   'imagem de satelite': 'Carta Ortoimagem',
   'imagem por satelite': 'Carta Ortoimagem',
 
-  // Abreviações de estados (mantido apenas os mais comuns para evitar falsos positivos)
-  'rj': 'Rio de Janeiro',
-  'sp': 'São Paulo',
-  'mg': 'Minas Gerais',
-  'es': 'Espírito Santo',
-  'pr': 'Paraná',
-  'sc': 'Santa Catarina',
-  'rs': 'Rio Grande do Sul',
-  'df': 'Distrito Federal',
-  'ba': 'Bahia',
-  'am': 'Amazonas',
-  'pa': 'Pará',
-  'ap': 'Amapá',
-  'ro': 'Rondônia',
-
   // Projetos e variações
   'copa 2014': 'Copa do Mundo 2014',
-  'olimpiada': 'Olimpíadas',
-  'olimpiadas': 'Olimpíadas',
-  'olimpíada': 'Olimpíadas',
+  olimpiada: 'Olimpíadas',
+  olimpiadas: 'Olimpíadas',
+  olimpíada: 'Olimpíadas',
   'jogos olimpicos': 'Olimpíadas',
-  'jogos olímpicos': 'Olimpíadas'
+  'jogos olímpicos': 'Olimpíadas',
 };
