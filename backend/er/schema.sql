@@ -46,7 +46,8 @@ CREATE TABLE areas_suprimento (
 CREATE TABLE datasets (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(200) NOT NULL,
-    descricao TEXT,
+    mi VARCHAR(20),
+    inom VARCHAR(50),
     escala VARCHAR(10) NOT NULL CHECK (escala IN ('1:25.000', '1:50.000', '1:100.000', '1:250.000')),
     tipo_produto VARCHAR(50) NOT NULL CHECK (tipo_produto IN ('Carta Topográfica', 'Carta Ortoimagem', 'Carta Temática')),
     projeto VARCHAR(100) NOT NULL CHECK (
@@ -62,7 +63,8 @@ CREATE TABLE datasets (
     texto_busca TSVECTOR GENERATED ALWAYS AS (
         to_tsvector('portuguese', 
             nome || ' ' || 
-            coalesce(descricao, '') || ' ' || 
+            COALESCE(mi, '') || ' ' || 
+            COALESCE(inom, '') || ' ' || 
             projeto
         )
     ) STORED
@@ -81,6 +83,10 @@ CREATE INDEX idx_areas_suprimento_geometry ON areas_suprimento USING gist(geom);
 -- Índices para joins e filtros frequentes
 CREATE INDEX idx_datasets_datas ON datasets (data_publicacao, data_criacao);
 CREATE INDEX idx_datasets_filters ON datasets (escala, tipo_produto, projeto);
+
+-- Índices específicos para MI e INOM
+CREATE INDEX idx_datasets_mi ON datasets(mi);
+CREATE INDEX idx_datasets_inom ON datasets(inom);
 
 -- Índices para buscas por nome normalizadas
 CREATE INDEX idx_estados_nome_normalizado ON estados(nome);

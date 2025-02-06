@@ -22,13 +22,27 @@ export class SearchService {
       const params: any[] = [];
       let paramCount = 1;
 
-      // Keyword search using enhanced text search
+      // Keyword search - now includes MI and INOM
       if (searchParams.keyword) {
-        conditions.push(
-          `texto_busca @@ websearch_to_tsquery('portuguese', $${paramCount})`,
+        conditions.push(`(
+          texto_busca @@ websearch_to_tsquery('portuguese', $${paramCount})
+          OR CASE 
+            -- Verifica correspondência exata para MI e INOM
+            WHEN $${paramCount + 1} ~ '^([0-9]{1,4}-[1-4]-(NO|NE|SO|SE)|[0-9]{1,4}-[1-4]|[0-9]{1,4}|[0-9]{1,3})$'
+              THEN mi = $${paramCount + 1}
+            WHEN $${paramCount + 1} ~ '^[A-Z]{2}-[0-9]{2}(-[A-Z]-[A-Z](-[IVX]{1,6}(-[1-4](-[NS][EO])?)?)?)?$'
+              THEN inom = $${paramCount + 1}
+            -- Se não for MI ou INOM, faz busca por LIKE no nome
+            ELSE lower(nome) LIKE lower($${paramCount + 2})
+          END
+        )`);
+
+        params.push(
+          searchParams.keyword, // Para busca em texto_busca
+          searchParams.keyword, // Para comparação exata MI/INOM
+          `%${searchParams.keyword}%`, // Para LIKE em nome
         );
-        params.push(searchParams.keyword);
-        paramCount++;
+        paramCount += 3;
       }
 
       // Exact filters
@@ -147,7 +161,8 @@ export class SearchService {
       const mainQuery = `
         SELECT 
           nome as name,
-          descricao as description,
+          mi,
+          inom,
           escala as scale,
           tipo_produto as "productType",
           projeto as project,

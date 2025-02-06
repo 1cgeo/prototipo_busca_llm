@@ -83,7 +83,8 @@ export interface PaginationParams {
 
 export interface SearchResult {
   name: string;
-  description: string;
+  mi?: string;
+  inom?: string;
   scale: Scale;
   productType: ProductType;
   project: Project;
@@ -98,7 +99,7 @@ export interface SearchMetadata {
   limit: number;
   totalPages: number;
   processedQuery?: SearchParams;
-  preprocessedText?: string; // Texto após pré-processamento
+  preprocessedText?: string;
 }
 
 export interface QueryResult {
