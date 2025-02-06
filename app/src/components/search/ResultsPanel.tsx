@@ -1,50 +1,57 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSearch } from '@/contexts/SearchContext';
 import { 
   Box, 
   Typography, 
   IconButton, 
   Button,
-  Stack,
-  CircularProgress,
-  Divider,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
+  Chip,
+  Tabs,
+  Tab,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Pagination,
-  Paper,
-  Fade,
-  Chip,
-  SelectChangeEvent
+  Stack,
+  Divider,
+  SelectChangeEvent,
+  Badge,
+  CircularProgress
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import FilterListIcon from '@mui/icons-material/FilterList';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import SearchFilters from './SearchFilters';
 import EmptyState from '@/components/common/EmptyState';
-import { structuredSearch, getMetadata } from '@/services/api';
-import { useEffect } from 'react';
+import ResultCard from './ResultCard';
+import { getMetadata } from '@/services/api';
 import type { MetadataOptions } from '@/types/search';
 
 interface ResultsPanelProps {
   onClose: () => void;
   onNewSearch: () => void;
+  onZoomTo?: (geometry: GeoJSON.Polygon) => void;
 }
 
-export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps) {
-  const { state, setResults, setPagination, setLoading, setError } = useSearch();
-  const [expandedAccordion, setExpandedAccordion] = useState<string | false>('results');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export default function ResultsPanel({ 
+  onClose,
+  onNewSearch,
+  onZoomTo
+}: ResultsPanelProps) {
+  const { state } = useSearch();
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
+  const [activeTab, setActiveTab] = useState<'results' | 'filters'>('results');
 
-  // Carregar metadados ao montar o componente
+  // Contador de filtros ativos
+  const activeFiltersCount = Object.keys(state.filters).filter(key => {
+    const value = state.filters[key as keyof typeof state.filters];
+    return value !== undefined && value !== null && value !== '';
+  }).length;
+
+  // Carregar metadados
   useEffect(() => {
     const loadMetadata = async () => {
       if (!metadata) {
@@ -63,59 +70,12 @@ export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps
     loadMetadata();
   }, [metadata]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  const handleAccordionChange = (panel: string) => (
-    _: React.SyntheticEvent,
-    isExpanded: boolean
-  ) => {
-    setExpandedAccordion(isExpanded ? panel : false);
-  };
-
-  const handlePageChange = async (_: unknown, page: number) => {
-    setIsSubmitting(true);
-    setLoading(true);
-    
-    try {
-      const response = await structuredSearch(
-        state.filters,
-        { page },
-        state.bbox
-      );
-
-      setResults(response.items);
-      setPagination({
-        total: response.metadata.total,
-        page: response.metadata.page,
-        limit: response.metadata.limit,
-        totalPages: response.metadata.totalPages
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Erro ao carregar página');
-    } finally {
-      setLoading(false);
-      setIsSubmitting(false);
-    }
+  const handleTabChange = (_: React.SyntheticEvent, newValue: 'results' | 'filters') => {
+    setActiveTab(newValue);
   };
 
   const handleItemsPerPageChange = (event: SelectChangeEvent<number>) => {
-    const newLimit = Number(event.target.value);
-    setItemsPerPage(newLimit);
-    
-    // Recarregar resultados com novo limite
-    if (state.filters) {
-      handlePageChange(null, 1); // Reset para primeira página com novo limite
-    }
-  };
-
-  const handleFilterSearch = () => {
-    setExpandedAccordion('results');
+    setItemsPerPage(Number(event.target.value));
   };
 
   if (!state.results.length) {
@@ -180,157 +140,88 @@ export default function ResultsPanel({ onClose, onNewSearch }: ResultsPanelProps
           </Box>
         </Box>
 
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          gap: 2
-        }}>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Por página</InputLabel>
-            <Select
-              value={itemsPerPage}
-              onChange={handleItemsPerPageChange}
-              label="Por página"
-            >
-              <MenuItem value={10}>10</MenuItem>
-              <MenuItem value={20}>20</MenuItem>
-              <MenuItem value={50}>50</MenuItem>
-            </Select>
-          </FormControl>
-
-          <Pagination
-            count={state.pagination.totalPages}
-            page={state.pagination.page}
-            onChange={handlePageChange}
-            size="small"
-            disabled={isSubmitting}
+        {/* Tabs */}
+        <Tabs 
+          value={activeTab}
+          onChange={handleTabChange}
+          sx={{ mb: 2 }}
+        >
+          <Tab 
+            icon={<FormatListBulletedIcon />}
+            iconPosition="start"
+            label="Resultados" 
+            value="results"
           />
-        </Box>
+          <Tab
+            icon={
+              <Badge 
+                badgeContent={activeFiltersCount} 
+                color="primary"
+                invisible={activeFiltersCount === 0}
+              >
+                <FilterListIcon />
+              </Badge>
+            }
+            iconPosition="start"
+            label="Filtros"
+            value="filters"
+          />
+        </Tabs>
+
+        {/* Controles de Paginação (apenas na aba de resultados) */}
+        {activeTab === 'results' && state.results.length > 10 && (
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            gap: 2
+          }}>
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Por página</InputLabel>
+              <Select
+                value={itemsPerPage}
+                onChange={handleItemsPerPageChange}
+                label="Por página"
+              >
+                <MenuItem value={10}>10</MenuItem>
+                <MenuItem value={20}>20</MenuItem>
+                <MenuItem value={50}>50</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+        )}
       </Box>
 
-      {/* Conteúdo com Acordeões */}
+      {/* Content */}
       <Box sx={{ 
         flex: 1, 
         overflowY: 'auto',
         px: 2,
         py: 1
       }}>
-        {/* Acordeão de Filtros */}
-        <Accordion
-          expanded={expandedAccordion === 'filters'}
-          onChange={handleAccordionChange('filters')}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Filtros Avançados</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            {metadata && !loadingMetadata ? (
-              <SearchFilters 
-                metadata={metadata}
-                onSearch={handleFilterSearch}
-                variant="drawer"
+        {activeTab === 'results' ? (
+          <Stack spacing={2}>
+            {state.results.map((result, index) => (
+              <ResultCard
+                key={`${result.name}-${index}`}
+                result={result}
+                onZoomTo={onZoomTo ? () => onZoomTo(result.geometry) : undefined}
               />
-            ) : (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            )}
-          </AccordionDetails>
-        </Accordion>
-
-        {/* Acordeão de Resultados */}
-        <Accordion
-          expanded={expandedAccordion === 'results'}
-          onChange={handleAccordionChange('results')}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography>Resultados</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            {isSubmitting ? (
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'center', 
-                py: 4
-              }}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Stack spacing={2}>
-                {state.results.map((result, index) => (
-                  <Fade 
-                    key={`${result.name}-${index}`}
-                    in={true}
-                    timeout={300 + index * 100}
-                  >
-                    <Paper 
-                      elevation={1}
-                      sx={{ 
-                        p: 2,
-                        '&:hover': {
-                          bgcolor: 'action.hover'
-                        }
-                      }}
-                    >
-                      <Typography variant="h6" gutterBottom>
-                        {result.name}
-                      </Typography>
-                      
-                      <Typography 
-                        color="text.secondary" 
-                        paragraph
-                        sx={{
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden'
-                        }}
-                      >
-                        {result.description}
-                      </Typography>
-
-                      <Stack spacing={2}>
-                        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                          <Chip 
-                            label={result.scale} 
-                            size="small" 
-                            variant="outlined"
-                          />
-                          <Chip 
-                            label={result.productType}
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                          />
-                          <Chip 
-                            label={result.project}
-                            size="small"
-                            variant="outlined"
-                            color="secondary"
-                          />
-                        </Box>
-
-                        <Box sx={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 1,
-                          color: 'text.secondary',
-                          fontSize: '0.875rem'
-                        }}>
-                          <CalendarTodayIcon fontSize="small" />
-                          <Typography variant="body2">
-                            Publicado em: {formatDate(result.publicationDate)}
-                          </Typography>
-                        </Box>
-                      </Stack>
-                    </Paper>
-                  </Fade>
-                ))}
-              </Stack>
-            )}
-          </AccordionDetails>
-        </Accordion>
+            ))}
+          </Stack>
+        ) : (
+          metadata && !loadingMetadata ? (
+            <SearchFilters 
+              metadata={metadata}
+              onSearch={() => setActiveTab('results')}
+              variant="drawer"
+            />
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )
+        )}
       </Box>
 
       {/* Footer com BBox */}

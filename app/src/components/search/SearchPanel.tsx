@@ -19,11 +19,13 @@ type SearchMode = 'natural' | 'structured';
 
 interface SearchPanelProps {
   onSearch: () => void;
+  onClose?: () => void;
   variant?: 'central' | 'drawer';
 }
 
 export default function SearchPanel({ 
   onSearch,
+  onClose,
   variant = 'central'
 }: SearchPanelProps) {
   const [mode, setMode] = useState<SearchMode>('natural');
@@ -108,6 +110,7 @@ export default function SearchPanel({
         {mode === 'natural' ? (
           <SearchForm 
             onSearch={onSearch}
+            onClose={onClose}
             variant={variant}
           />
         ) : loadingMetadata ? (

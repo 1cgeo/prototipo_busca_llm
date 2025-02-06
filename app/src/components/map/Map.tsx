@@ -11,23 +11,23 @@ import 'leaflet/dist/leaflet.css';
 
 interface MapProps {
   enableBboxSelection?: boolean;
+  onZoomTo?: (zoomFn: (geometry: GeoJSON.Polygon) => void) => void;
 }
 
 export default function Map({ 
-  enableBboxSelection = false
+  enableBboxSelection = false,
+  onZoomTo 
 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const resultsLayerRef = useRef<L.GeoJSON | null>(null);
+  const activePopupRef = useRef<L.Popup | null>(null);
   const { state, setBoundingBox, setMapClearFunction } = useSearch();
   const { results } = state;
   const theme = useTheme();
 
   // Inicialização do mapa
-  const { isDarkMode } = useMapInitialization({ 
-    mapRef, 
-    containerRef 
-  });
+  const { isDarkMode } = useMapInitialization({ mapRef, containerRef });
 
   // Eventos do mapa
   const { clearSelection } = useMapEvents({
@@ -51,6 +51,52 @@ export default function Map({
     opacity: 1,
     fillOpacity: 0.4
   }), []);
+
+  // Zoom para feature
+  const zoomToFeature = useCallback((geometry: GeoJSON.Polygon) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const bounds = L.geoJSON(geometry).getBounds();
+    map.fitBounds(bounds, {
+      padding: [50, 50],
+      maxZoom: 12,
+      animate: true,
+      duration: 0.5
+    });
+  }, []);
+
+  // Registrar função de zoom
+  useEffect(() => {
+    if (onZoomTo) {
+      onZoomTo(zoomToFeature);
+    }
+  }, [onZoomTo, zoomToFeature]);
+
+  // Fechar popup ao clicar fora
+  const handleMapClick = useCallback((e: L.LeafletMouseEvent) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    let clickedFeature = false;
+    map.eachLayer((layer) => {
+      if (layer instanceof L.GeoJSON) {
+        layer.eachLayer((subLayer) => {
+          if (subLayer instanceof L.Path) {
+            const polygon = subLayer as L.Polygon;
+            if (polygon.getBounds().contains(e.latlng)) {
+              clickedFeature = true;
+            }
+          }
+        });
+      }
+    });
+
+    if (!clickedFeature && activePopupRef.current) {
+      map.closePopup(activePopupRef.current);
+      activePopupRef.current = null;
+    }
+  }, []);
 
   // Criar popup para feature
   const createPopupContent = useCallback((feature: Feature<Geometry, MapFeature['properties']>) => {
@@ -87,6 +133,19 @@ export default function Map({
     return container;
   }, [isDarkMode]);
 
+  // Adicionar evento de click no mapa
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    map.on('click', handleMapClick);
+
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [handleMapClick]);
+
+  // Registrar função de limpeza no contexto
   useEffect(() => {
     setMapClearFunction(clearSelection);
   }, [clearSelection, setMapClearFunction]);
@@ -114,9 +173,8 @@ export default function Map({
         geometry: result.geometry
       })),
       {
-        style: () => getFeatureStyle(),
+        style: getFeatureStyle,
         onEachFeature: (feature, layer) => {
-          // Eventos de hover
           layer.on({
             mouseover: (e) => {
               const l = e.target;
@@ -129,6 +187,13 @@ export default function Map({
             },
             click: (e) => {
               const l = e.target;
+              
+              // Fechar popup anterior se existir
+              if (activePopupRef.current) {
+                map.closePopup(activePopupRef.current);
+              }
+
+              // Criar e abrir novo popup
               const popup = L.popup({
                 closeButton: true,
                 closeOnClick: false,
@@ -137,6 +202,7 @@ export default function Map({
                 .setLatLng(e.latlng)
                 .setContent(createPopupContent(feature));
 
+              activePopupRef.current = popup;
               l.bindPopup(popup).openPopup();
             }
           });
@@ -162,7 +228,13 @@ export default function Map({
         map.removeLayer(resultsLayerRef.current);
       }
     };
-  }, [results, isDarkMode, getFeatureStyle, getHoverStyle, createPopupContent]);
+  }, [
+    results, 
+    isDarkMode, 
+    getFeatureStyle, 
+    getHoverStyle, 
+    createPopupContent
+  ]);
 
   return (
     <Box 

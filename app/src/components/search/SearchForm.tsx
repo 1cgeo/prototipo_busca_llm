@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearch } from '@/contexts/SearchContext';
 import { naturalLanguageSearch } from '@/services/api';
 import debounce from 'lodash/debounce';
@@ -14,12 +14,18 @@ import {
   Alert,
   AlertTitle,
   Button,
-  Divider
+  Divider,
+  Chip,
+  Stack
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import ClearIcon from '@mui/icons-material/Clear';
 import PlaceIcon from '@mui/icons-material/Place';
+import CloseIcon from '@mui/icons-material/Close';
+import TuneIcon from '@mui/icons-material/Tune';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import MapIcon from '@mui/icons-material/Map';
 
 const SEARCH_EXAMPLES = [
   'Cartas topográficas do Rio de Janeiro em escala 1:25.000',
@@ -40,47 +46,68 @@ const validateQuery = (text: string): string | undefined => {
 
 interface SearchFormProps {
   onSearch: () => void;
+  onClose?: () => void;
   variant?: 'central' | 'drawer';
 }
 
 export default function SearchForm({ 
   onSearch,
+  onClose,
   variant = 'central' 
 }: SearchFormProps) {
   const [query, setQuery] = useState('');
   const [showExamples, setShowExamples] = useState(false);
   const { 
+    state,
     setResults, 
     setFilters, 
     setPagination, 
     setLoading, 
     setError,
     setOriginalQuery,
-    state,
     setBoundingBox,
     clearMapSelection
   } = useSearch();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>();
 
+  // Atualizar query quando mudar os filtros ou query original
+  useEffect(() => {
+    if (state.originalQuery) {
+      setQuery(state.originalQuery);
+    }
+  }, [state.originalQuery]);
+
   const debouncedValidation = useCallback(
     (text: string) => {
-      setValidationError(validateQuery(text));
+      const debouncedFn = debounce((value: string) => {
+        setValidationError(validateQuery(value));
+      }, 300);
+      debouncedFn(text);
     },
-    []
+    [setValidationError]
   );
 
   const handleQueryChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
-    debounce(debouncedValidation, 300)(newQuery);
+    debouncedValidation(newQuery);
   }, [debouncedValidation]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
     setValidationError(undefined);
     setShowExamples(false);
-  }, []);
+    setResults([]);
+    setFilters({});
+    setOriginalQuery('');
+    setPagination({
+      total: 0,
+      page: 1,
+      limit: 10,
+      totalPages: 0
+    });
+  }, [setResults, setFilters, setOriginalQuery, setPagination]);
 
   const handleExampleClick = useCallback((example: string) => {
     setQuery(example);
@@ -123,6 +150,68 @@ export default function SearchForm({
       setLoading(false);
       setIsSubmitting(false);
     }
+  };
+
+  // Renderizar chips de filtros ativos
+  const renderActiveFilters = () => {
+    const chips = [];
+
+    if (state.filters.scale) {
+      chips.push(
+        <Chip
+          key="scale"
+          size="small"
+          icon={<MapIcon />}
+          label={`Escala: ${state.filters.scale}`}
+          onDelete={() => handleRemoveFilter('scale')}
+        />
+      );
+    }
+
+    if (state.filters.productType) {
+      chips.push(
+        <Chip
+          key="productType"
+          size="small"
+          icon={<TuneIcon />}
+          label={`Tipo: ${state.filters.productType}`}
+          onDelete={() => handleRemoveFilter('productType')}
+        />
+      );
+    }
+
+    if (state.filters.publicationPeriod) {
+      const { start, end } = state.filters.publicationPeriod;
+      chips.push(
+        <Chip
+          key="publicationPeriod"
+          size="small"
+          icon={<CalendarTodayIcon />}
+          label={`Publicação: ${new Date(start).toLocaleDateString()} a ${new Date(end).toLocaleDateString()}`}
+          onDelete={() => handleRemoveFilter('publicationPeriod')}
+        />
+      );
+    }
+
+    if (state.filters.project) {
+      chips.push(
+        <Chip
+          key="project"
+          size="small"
+          icon={<TuneIcon />}
+          label={`Projeto: ${state.filters.project}`}
+          onDelete={() => handleRemoveFilter('project')}
+        />
+      );
+    }
+
+    return chips;
+  };
+
+  const handleRemoveFilter = (field: keyof typeof state.filters) => {
+    const newFilters = { ...state.filters };
+    delete newFilters[field];
+    setFilters(newFilters);
   };
 
   const formStyles = variant === 'central' ? {
@@ -189,6 +278,18 @@ export default function SearchForm({
           </IconButton>
         </Tooltip>
 
+        {variant === 'central' && onClose && (
+          <Tooltip title="Fechar">
+            <IconButton
+              size="small"
+              onClick={onClose}
+              sx={{ mr: 0.5 }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+
         <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
         <Tooltip title="Buscar">
@@ -209,6 +310,19 @@ export default function SearchForm({
           </span>
         </Tooltip>
       </Paper>
+
+      {/* Chips de Filtros Ativos */}
+      {variant === 'drawer' && (
+        <Stack 
+          direction="row" 
+          spacing={1} 
+          sx={{ mt: 2 }}
+          flexWrap="wrap"
+          useFlexGap
+        >
+          {renderActiveFilters()}
+        </Stack>
+      )}
 
       {/* Mensagens e Alertas */}
       <Box sx={{ mt: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
