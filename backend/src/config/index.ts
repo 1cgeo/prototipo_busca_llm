@@ -12,6 +12,6 @@ export const config = {
     password: process.env.DB_PASSWORD || '',
   },
   llm: {
-    baseUrl: process.env.LLM_BASE_URL || 'http://localhost:11434',
+    baseUrl: process.env.LLM_BASE_URL || 'http://127.0.0.1:11434',
   },
 };

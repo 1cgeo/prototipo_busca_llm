@@ -2,13 +2,6 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
--- Função imutável para normalização de texto
-CREATE OR REPLACE FUNCTION normalize_text(text)
-  RETURNS text AS
-$$
-  SELECT lower(unaccent($1))
-$$ LANGUAGE SQL IMMUTABLE PARALLEL SAFE;
-
 -- Tabela de estados
 CREATE TABLE estados (
     id SERIAL PRIMARY KEY,

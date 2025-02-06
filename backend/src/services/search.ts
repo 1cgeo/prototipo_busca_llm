@@ -81,7 +81,7 @@ export class SearchService {
       if (bbox) {
         conditions.push(
           `ST_Intersects(
-            geometry, 
+            geom, 
             ST_MakeEnvelope($${paramCount}, $${paramCount + 1}, $${paramCount + 2}, $${paramCount + 3}, 4326)
           )`,
         );
@@ -94,7 +94,7 @@ export class SearchService {
         conditions.push(`EXISTS (
           SELECT 1 FROM municipios m 
           WHERE unaccent(lower(m.nome)) ILIKE unaccent(lower($${paramCount}))
-          AND ST_Intersects(datasets.geometry, m.geometry)
+          AND ST_Intersects(datasets.geom, m.geom)
         )`);
         params.push(`%${searchParams.city}%`);
         paramCount++;
@@ -105,7 +105,7 @@ export class SearchService {
         conditions.push(`EXISTS (
           SELECT 1 FROM estados e 
           WHERE unaccent(lower(e.nome)) ILIKE unaccent(lower($${paramCount}))
-          AND ST_Intersects(datasets.geometry, e.geometry)
+          AND ST_Intersects(datasets.geom, e.geom)
         )`);
         params.push(`%${searchParams.state}%`);
         paramCount++;
@@ -116,7 +116,7 @@ export class SearchService {
         conditions.push(`EXISTS (
           SELECT 1 FROM areas_suprimento a 
           WHERE a.nome = $${paramCount}
-          AND ST_Intersects(datasets.geometry, a.geometry)
+          AND ST_Intersects(datasets.geom, a.geom)
         )`);
         params.push(searchParams.supplyArea);
         paramCount++;
@@ -153,7 +153,7 @@ export class SearchService {
           projeto as project,
           data_publicacao as "publicationDate",
           data_criacao as "creationDate",
-          ST_AsGeoJSON(geometry)::json as geometry
+          ST_AsGeoJSON(geom)::json as geometry
         FROM datasets
         ${whereClause}
         ${orderClause}

@@ -141,7 +141,7 @@ For Geoinformation Centers (supplyArea), examine the mention of Geoinformation C
 
 When analyzing scale, look for direct scale mentions like 1:25.000 or 25k. Consider qualitative descriptions where detailed or large scale indicates 1:25.000, medium scale suggests 1:100.000, and small or general scale points to 1:250.000. With multiple scales, always choose the most detailed one. For instance, 25k or 50k should become 1:25.000, while a detailed map implies 1:25.000.
 
-For location analysis, determine whether mentions refer to states or municipalities. Convert state abbreviations to full names and identify associated states for cities. With multiple locations, use the first mentioned. Consider examples like RJ becoming Rio de Janeiro, or Manaus implying both city: Manaus and state: Amazonas. Avoid interpreting generic regional references.
+For location analysis, determine whether mentions refer to states or municipalities. Convert state abbreviations to full names and identify associated states for cities. If the city is ambiguous do not specify the state. With multiple locations, use the first mentioned. Consider examples like RJ becoming Rio de Janeiro. Avoid interpreting generic regional references.
 
 Product type analysis requires attention to both explicit mentions and implicit indicators. Satellite or image references suggest Orthoimagery Chart, contour lines indicate Topographic Chart, and thematic mentions point to Thematic Chart. Generic map or chart references default to Topographic Chart if no other indicators exist.
 
@@ -158,10 +158,9 @@ Here are comprehensive examples of query analysis:
 
 Query: "mapas detalhados de Manaus e Belém"
 {
-  "reasoning": "Location: Multiple cities mentioned, using the first one (Manaus). State is inferred from the city (Amazonas). Scale: Term 'detailed' indicates the most precise scale (1:25.000). Product Type: Generic term 'maps' without qualifiers defaults to Topographic Chart.",
+  "reasoning": "Location: Multiple cities mentioned, using the first one (Manaus). Scale: Term 'detailed' indicates the most precise scale (1:25.000). Product Type: Generic term 'maps' without qualifiers defaults to Topographic Chart.",
   "scale": "1:25.000",
   "city": "Manaus",
-  "state": "Amazonas",
   "productType": "Carta Topográfica"
 }
 
