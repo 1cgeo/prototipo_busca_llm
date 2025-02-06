@@ -21,75 +21,47 @@ const DateRange = z.object({
   end: z.string().describe('Data final em formato ISO YYYY-MM-DD'),
 });
 
-const ExtractedSearchParams = z
-  .object({
-    reasoning: z
-      .string()
-      .describe(
-        'Explique passo a passo como cada parâmetro foi extraído, mencionando quais termos do texto original levaram a cada decisão',
-      ),
+const ExtractedSearchParams = z.object({
+  reasoning: z.string()
+    .describe('Explain step by step how each parameter was extracted, mentioning which terms from the original text led to each decision'),
 
-    keyword: z
-      .union([z.string(), z.undefined(), z.null()])
-      .describe(
-        'Palavras-chave significativas para busca textual. Extrair apenas quando houver termos claramente relevantes para busca, ignorando palavras comuns como "mapa", "carta", "preciso", etc.',
-      ),
+  keyword: z.union([z.string(), z.undefined(), z.null()])
+    .describe('Significant keywords for text search. Extract only when there are clearly relevant search terms, ignoring common words like map, chart, need, etc.'),
 
-    scale: z.union([z.enum(SCALES), z.undefined(), z.null()])
-      .describe(`Escala do mapa. Aceitar variações e normalizar: Grande escala = 1:25.000, Média escala = 1:100.000, Pequena escala = 1:250.000, Normalizar formatos: 25k, 25.000, 25000, 1/25.000 em 1:25.000, Se múltiplas escalas forem mencionadas, priorizar a maior (mais detalhada)`),
+  scale: z.union([z.enum(SCALES), z.undefined(), z.null()])
+    .describe('Map scale. Accept variations and normalize: Large scale = 1:25.000, Medium scale = 1:100.000, Small scale = 1:250.000. Normalize formats: 25k, 25.000, 25000, 1/25.000 to 1:25.000. When multiple scales are mentioned, prioritize the largest (most detailed) one'),
 
-    productType: z.union([z.enum(PRODUCT_TYPES), z.undefined(), z.null()])
-      .describe(`Tipo de produto cartográfico. Interpretações comuns: "mapa" ou "carta" sem qualificador = "Carta Topográfica",  Menção a imagem/satélite = "Carta Ortoimagem", Mencão a temático = "Carta Temática"`),
-    state: z
-      .union([z.string(), z.undefined(), z.null()])
-      .describe(
-        'Nome completo do estado brasileiro. Converter siglas (ex: RJ para Rio de Janeiro). Se múltiplos estados forem mencionados, usar o primeiro.',
-      ),
+  productType: z.union([z.enum(PRODUCT_TYPES), z.undefined(), z.null()])
+    .describe('Cartographic product type. Common interpretations: map or chart without qualifier = Topographic Chart, mention of image/satellite = Orthoimagery Chart, mention of thematic = Thematic Chart'),
 
-    city: z
-      .union([z.string(), z.undefined(), z.null()])
-      .describe(
-        'Nome do município brasileiro. Se múltiplos municípios forem mencionados, usar o primeiro. Preservar acentuação.',
-      ),
+  state: z.union([z.string(), z.undefined(), z.null()])
+    .describe('Full name of Brazilian state. Convert abbreviations (e.g., RJ to Rio de Janeiro). When multiple states are mentioned, use the first one. Preserve proper capitalization and accents'),
 
-    supplyArea: z.union([z.enum(SUPPLY_AREAS), z.undefined(), z.null()])
-    .describe(
-      'Centro de Geoinformação responsável. Converter siglas para o nome completo.',
-    ),
+  city: z.union([z.string(), z.undefined(), z.null()])
+    .describe('Name of Brazilian municipality. When multiple cities are mentioned, use the first one. Preserve proper capitalization and accents'),
 
-    project: z.union([z.enum(PROJECTS), z.undefined(), z.null()])
-      .describe(`Projeto específico. Normalizar variações comuns: "copa" para "Copa do Mundo 2014", "olimpiadas/olimpíadas" para "Olimpíadas"`),
+  supplyArea: z.union([z.enum(SUPPLY_AREAS), z.undefined(), z.null()])
+    .describe('Responsible Geoinformation Center. When multiple centers mentioned, use the first one. Ignore mentions without specific number'),
 
-    publicationPeriod: z.union([DateRange, z.undefined(), z.null()])
-    .describe(
-      'Período de publicação. "recente"=últimos 6 meses, "esse ano"=ano atual',
-    ),
+  project: z.union([z.enum(PROJECTS), z.undefined(), z.null()])
+    .describe('Specific project. Normalize common variations: world cup/copa to Copa do Mundo 2014, olympics/olimpiadas to Olimpíadas. Match exact project names from the predefined list'),
 
-    creationPeriod: z
-      .union([DateRange, z.undefined(), z.null()])
-      .describe('Período de criação do produto'),
+  publicationPeriod: z.union([DateRange, z.undefined(), z.null()])
+    .describe('Publication period. Convert relative dates: recent = last 6 months, this year = current year. Use ISO format YYYY-MM-DD'),
 
+  creationPeriod: z.union([DateRange, z.undefined(), z.null()])
+    .describe('Creation period. Convert relative dates to ISO format YYYY-MM-DD. Handle specific periods like quarters and semesters'),
 
-    sortField: z.enum(SORT_FIELDS).default('publicationDate')
-    .describe(
-      'Campo para ordenação. Usar "publicationDate" se não especificado',
-    ),
+  sortField: z.enum(SORT_FIELDS).default('publicationDate')
+    .describe('Field for sorting results. Use publicationDate if not specified'),
 
-    sortDirection: z
-      .union([z.enum(SORT_DIRECTIONS), z.undefined(), z.null()])
-      .default('DESC')      
-      .describe(
-        'Direção da ordenação. Usar "DESC" (mais recente) se não especificado',
-      ),
+  sortDirection: z.enum(SORT_DIRECTIONS).default('DESC')
+    .describe('Sort direction. Use DESC (most recent) if not specified. Convert newest/latest to DESC, oldest to ASC'),
 
-    limit: z
-      .union([z.number().min(1).max(100), z.undefined(), z.null()])
-      .describe(
-        'Número máximo de resultados. Extrair apenas números explicitamente mencionados entre 1 e 100.',
-      ),
-  })
-  .describe(
-    'Parâmetros de busca extraídos da consulta em linguagem natural. Sempre priorizar exatidão sobre completude.',
+  limit: z.union([z.number().min(1).max(100), z.undefined(), z.null()])
+    .describe('Maximum number of results. Extract only explicitly mentioned numbers between 1 and 100. Convert some to 5, all to undefined')
+}).describe(
+    'Search parameters extracted from the natural language query. Always prioritize accuracy over completeness.',
   );
 
 export class LLMService {
@@ -110,6 +82,8 @@ export class LLMService {
     // Pré-processa a query
     const preprocessedText = preprocessQuery(query.query);
     let extractedParams = {};
+    console.log(query.query)
+    console.log(preprocessedText)
 
     try {
       // Gera o prompt para o modelo
@@ -129,6 +103,7 @@ export class LLMService {
         },
         max_retries: 3,
       });
+      console.log(extraction)
 
       logger.info('LLM extraction successful', {
         originalQuery: query.query,
@@ -160,70 +135,39 @@ export class LLMService {
   private buildPrompt(): string {
     const today = new Date().toISOString().split('T')[0];
 
-    return `Você é um especialista em extrair parâmetros estruturados de consultas sobre dados cartográficos em português.
+    return `You are an expert in natural language processing specialized in extracting search parameters for cartographic data. Current date: ${today}. Let's analyze queries step by step, field by field, through a careful thought process.
 
-Data atual: ${today}
+For Geoinformation Centers (supplyArea), examine the mention of Geoinformation Center. When multiple centers are mentioned, focus on the first one. Require specific number mention - generic CGEO references should be ignored.
 
-Para cada consulta, faça as seguintes perguntas:
+When analyzing scale, look for direct scale mentions like 1:25.000 or 25k. Consider qualitative descriptions where detailed or large scale indicates 1:25.000, medium scale suggests 1:100.000, and small or general scale points to 1:250.000. With multiple scales, always choose the most detailed one. For instance, 25k or 50k should become 1:25.000, while a detailed map implies 1:25.000.
 
-1. MÚLTIPLOS VALORES
-- Há múltiplas escalas mencionadas?
-  Escolha a mais detalhada (menor denominador)
-  Exemplo: "25k ou 50k" use 1:25.000
+For location analysis, determine whether mentions refer to states or municipalities. Convert state abbreviations to full names and identify associated states for cities. With multiple locations, use the first mentioned. Consider examples like RJ becoming Rio de Janeiro, or Manaus implying both city: Manaus and state: Amazonas. Avoid interpreting generic regional references.
 
-- Há múltiplos estados/cidades?
-  Use o primeiro mencionado
-  Exemplo: "mapas de SP e RJ" use São Paulo
+Product type analysis requires attention to both explicit mentions and implicit indicators. Satellite or image references suggest Orthoimagery Chart, contour lines indicate Topographic Chart, and thematic mentions point to Thematic Chart. Generic map or chart references default to Topographic Chart if no other indicators exist.
 
-- Há múltiplos CGEOs?
-  Use o primeiro mencionado
-  Exemplo: "primeiro e segundo cgeo" use 1° Centro de Geoinformação
+Project identification involves matching official project names while handling common variations. World Cup references should convert to Copa do Mundo 2014, and Olympics mentions become Olimpíadas. Always match against the predefined project list for validation.
 
-2. LOCALIZAÇÃO (Estado e Cidade)
-Para cada localidade mencionada, pergunte:
-- É um estado ou cidade?
-- Se é sigla, qual o nome completo?
-- Se menciona cidade, qual seu estado?
-Tente identificar tanto estado quanto cidade quando possível:
-- "Rio" para state: "Rio de Janeiro"
-- "Salvador" para city: "Salvador", state: "Bahia"
-- "Cuiabá, MT" para city: "Cuiabá", state: "Mato Grosso"
+Date processing requires distinguishing between publication and creation dates. Convert relative periods to specific date ranges - this year means the full current year, last 6 months requires calculating the exact date range. Always output dates in ISO format (YYYY-MM-DD).
 
-3. PRIORIZAÇÃO DE VALORES
-Para cada menção temporal, pergunte:
-- É sobre publicação ou criação?
-- É uma data específica ou período relativo?
-- Qual a data mais relevante se houver múltiplas?
+For sorting and limits, interpret directional indicators where newest or most recent implies DESC ordering, while oldest suggests ASC. Handle numeric limits explicitly, converting some to 5 and interpreting all as unlimited. For example, 10 most recent should set limit: 10 with DESC ordering.
 
-Para cada menção de ordenação, pergunte:
-- É sobre data de criação ou publicação?
-- Indica mais recente ou mais antigo?
-- Qual o critério principal se houver múltiplos?
+For each analysis:
+Ask what specific words or phrases support each extraction decision. Consider multiple interpretations and choose the most confident one. Document your reasoning, explaining how each conclusion was reached. Always prioritize precision over completeness - leave fields undefined when confidence is low.
 
-4. INFERÊNCIA DE VALORES
-Pergunte para termos implícitos:
-- "detalhado" ou "preciso" para scale: "1:25.000"
-- "visão geral" para scale: "1:250.000"
-- "satélite" ou "imagem" para productType: "Carta Ortoimagem"
-- "curvas de nível" para productType: "Carta Topográfica"
-- "recente" para sortDirection: "DESC" + últimos 6 meses
-- "alguns" para limit: 5
-- "todos" para não definir limite
+Here are comprehensive examples of query analysis:
 
-Exemplos de inferências corretas:
-
-1. Query: "mapas detalhados de Manaus e Belém"
+Query: "mapas detalhados de Manaus e Belém"
 {
-  "reasoning": "- Localização: múltiplas cidades, usando a primeira (Manaus/AM) - 'detalhados' indica escala 1:25.000 - 'mapas' indica Carta Topográfica",
+  "reasoning": "Location: Multiple cities mentioned, using the first one (Manaus). State is inferred from the city (Amazonas). Scale: Term 'detailed' indicates the most precise scale (1:25.000). Product Type: Generic term 'maps' without qualifiers defaults to Topographic Chart.",
   "scale": "1:25.000",
   "city": "Manaus",
   "state": "Amazonas",
   "productType": "Carta Topográfica"
 }
 
-2. Query: "cartas do Rio publicadas esse ano"
+Query: "cartas do Rio publicadas esse ano"
 {
-  "reasoning": "- Localização: 'Rio' é ambíguo, mas comum referir-se ao estado- 'esse ano' refere-se a publicação em 2025 - 'cartas' sem qualificador indica Carta Topográfica",
+  "reasoning": "Location: 'Rio' is ambiguous but commonly refers to the state Rio de Janeiro rather than the city. Time Period: 'this year' refers to publication in 2025, setting full year range. Product Type: Generic term 'charts' without qualifiers indicates Topographic Chart.",
   "state": "Rio de Janeiro",
   "productType": "Carta Topográfica",
   "publicationPeriod": {
@@ -232,26 +176,49 @@ Exemplos de inferências corretas:
   }
 }
 
-3. Query: "imagens recentes de Curitiba e região"
+Query: "imagens recentes na área do 2° Centro de Geoinformação"
 {
-  "reasoning": "- Localização: Curitiba/PR identificados - 'imagens' indica Carta Ortoimagem - 'recentes' implica últimos 6 meses e ordenação DESC",
-  "city": "Curitiba",
-  "state": "Paraná",
+  "reasoning": "Supply Area: Exact match for '2° Centro de Geoinformação'. Product Type: Term 'imagery' indicates Orthoimagery Chart. Time Filter: 'recent' implies last 6 months and descending sort order. Publication period calculated from current date (2025-02-05).",
+  "supplyArea": "2° Centro de Geoinformação",
   "productType": "Carta Ortoimagem",
   "publicationPeriod": {
-    "start": "2024-08-04",
-    "end": "2025-02-04"
+    "start": "2024-08-05",
+    "end": "2025-02-05"
   },
   "sortField": "publicationDate",
   "sortDirection": "DESC"
 }
 
-Ao analisar cada consulta:
-1. Primeiro identifique todos os valores mencionados
-2. Resolva casos de múltiplos valores usando as regras de priorização
-3. Verifique relações entre cidade/estado
-4. Infira valores implícitos com alta confiança
-5. Documente seu raciocínio explicando cada decisão`;
+Query: "mapas do primeiro cgeo de 2023 em escala 25k ordenados por data de criação"
+{
+  "reasoning": "Supply Area: 'first cgeo' normalizes to '1° Centro de Geoinformação'. Scale: '25k' converts to '1:25.000'. Time Period: Specific year 2023 for creation dates. Sort: Explicit request for creation date sorting without direction implies ascending.",
+  "supplyArea": "1° Centro de Geoinformação",
+  "scale": "1:25.000",
+  "creationPeriod": {
+    "start": "2023-01-01",
+    "end": "2023-12-31"
+  },
+  "sortField": "creationDate",
+  "sortDirection": "ASC"
+}
+
+Query: "5 cartas temáticas mais recentes do projeto Bahia"
+{
+  "reasoning": "Limit: Explicit number 5 requested. Product Type: 'thematic maps' indicates Thematic Chart. Project: Direct reference to Bahia project. Sort: 'newest' implies publication date descending.",
+  "productType": "Carta Temática",
+  "project": "Bahia",
+  "limit": 5,
+  "sortField": "publicationDate",
+  "sortDirection": "DESC"
+}
+
+Query: "cartas ortoimagem das olimpíadas em média escala"
+{
+  "reasoning": "Project: 'olympics' normalizes to 'Olimpíadas'. Product Type: Direct reference to orthoimagery. Scale: 'medium scale' converts to 1:100.000 based on scale classifications.",
+  "project": "Olimpíadas",
+  "productType": "Carta Ortoimagem",
+  "scale": "1:100.000"
+}`;
   }
 }
 
