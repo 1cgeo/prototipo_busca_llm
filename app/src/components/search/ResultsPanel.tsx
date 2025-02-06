@@ -3,44 +3,35 @@ import { useSearch } from '@/contexts/SearchContext';
 import { 
   Box, 
   Typography, 
-  IconButton, 
   Button,
   Chip,
   Tabs,
   Tab,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  Badge,
+  CircularProgress,
   Stack,
   Divider,
-  SelectChangeEvent,
-  Badge,
-  CircularProgress
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
 import SearchFilters from './SearchFilters';
 import EmptyState from '@/components/common/EmptyState';
 import ResultCard from './ResultCard';
+import ActiveFilters from './ActiveFilters';
 import { getMetadata } from '@/services/api';
 import type { MetadataOptions } from '@/types/search';
 
 interface ResultsPanelProps {
-  onClose: () => void;
   onNewSearch: () => void;
   onZoomTo?: (geometry: GeoJSON.Polygon) => void;
 }
 
 export default function ResultsPanel({ 
-  onClose,
   onNewSearch,
   onZoomTo
 }: ResultsPanelProps) {
-  const { state } = useSearch();
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const { state, reset } = useSearch();
   const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [activeTab, setActiveTab] = useState<'results' | 'filters'>('results');
@@ -70,12 +61,13 @@ export default function ResultsPanel({
     loadMetadata();
   }, [metadata]);
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: 'results' | 'filters') => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: 'results' | 'filters') => {
     setActiveTab(newValue);
   };
 
-  const handleItemsPerPageChange = (event: SelectChangeEvent<number>) => {
-    setItemsPerPage(Number(event.target.value));
+  const handleNewSearch = () => {
+    reset(); // Limpa os resultados e filtros
+    onNewSearch(); // Chama a função do AppLayout que controla a visibilidade dos painéis
   };
 
   if (!state.results.length) {
@@ -87,7 +79,7 @@ export default function ResultsPanel({
             <Button
               variant="contained"
               startIcon={<SearchIcon />}
-              onClick={onNewSearch}
+              onClick={handleNewSearch}
             >
               Nova Busca
             </Button>
@@ -122,23 +114,17 @@ export default function ResultsPanel({
             />
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-              size="small"
-              startIcon={<SearchIcon />}
-              onClick={onNewSearch}
-            >
-              Nova Busca
-            </Button>
-            
-            <IconButton 
-              size="small"
-              onClick={onClose}
-            >
-              <CloseIcon />
-            </IconButton>
-          </Box>
+          <Button
+            size="small"
+            startIcon={<SearchIcon />}
+            onClick={handleNewSearch}
+          >
+            Nova Busca
+          </Button>
         </Box>
+
+        {/* Active Filters Summary */}
+        <ActiveFilters />
 
         {/* Tabs */}
         <Tabs 
@@ -167,29 +153,6 @@ export default function ResultsPanel({
             value="filters"
           />
         </Tabs>
-
-        {/* Controles de Paginação (apenas na aba de resultados) */}
-        {activeTab === 'results' && state.results.length > 10 && (
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            gap: 2
-          }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Por página</InputLabel>
-              <Select
-                value={itemsPerPage}
-                onChange={handleItemsPerPageChange}
-                label="Por página"
-              >
-                <MenuItem value={10}>10</MenuItem>
-                <MenuItem value={20}>20</MenuItem>
-                <MenuItem value={50}>50</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-        )}
       </Box>
 
       {/* Content */}
@@ -211,11 +174,13 @@ export default function ResultsPanel({
           </Stack>
         ) : (
           metadata && !loadingMetadata ? (
-            <SearchFilters 
-              metadata={metadata}
-              onSearch={() => setActiveTab('results')}
-              variant="drawer"
-            />
+            <Box sx={{ height: '100%' }}>
+              <SearchFilters 
+                metadata={metadata}
+                onSearch={() => setActiveTab('results')}
+                variant="drawer"
+              />
+            </Box>
           ) : (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
               <CircularProgress size={24} />

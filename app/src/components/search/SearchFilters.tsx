@@ -15,8 +15,10 @@ import {
   SelectChangeEvent,
   Alert,
   Stack,
-  IconButton,
   CircularProgress,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -29,94 +31,11 @@ import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 dayjs.locale('pt-br');
 
-interface FilterSection {
-  id: string;
-  title: string;
-  icon: React.ReactNode;
-}
-
-const FILTER_SECTIONS: FilterSection[] = [
-  { 
-    id: 'identification', 
-    title: 'Identificação',
-    icon: <FilterAltIcon fontSize="small" />
-  },
-  { 
-    id: 'location', 
-    title: 'Localização',
-    icon: <LocationOnIcon fontSize="small" />
-  },
-  { 
-    id: 'project', 
-    title: 'Projeto',
-    icon: <AccountTreeIcon fontSize="small" />
-  },
-  { 
-    id: 'dates', 
-    title: 'Períodos',
-    icon: <CalendarTodayIcon fontSize="small" />
-  }
-];
-
-interface FilterSectionProps {
-  section: FilterSection;
-  isExpanded: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}
-
-function FilterSectionComponent({ 
-  section, 
-  isExpanded, 
-  onToggle, 
-  children 
-}: FilterSectionProps) {
-  return (
-    <Box sx={{ mb: 2 }}>
-      <Box
-        onClick={onToggle}
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          py: 1,
-          px: 2,
-          borderRadius: 1,
-          bgcolor: theme => theme.palette.action.hover,
-          cursor: 'pointer',
-          '&:hover': {
-            bgcolor: theme => theme.palette.action.selected,
-          }
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          {section.icon}
-          <Typography variant="subtitle2" color="primary">
-            {section.title}
-          </Typography>
-        </Box>
-        <IconButton size="small" sx={{ p: 0 }}>
-          {isExpanded ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-        </IconButton>
-      </Box>
-      
-      <Box sx={{ 
-        display: isExpanded ? 'block' : 'none',
-        mt: 2,
-        px: 2
-      }}>
-        {children}
-      </Box>
-    </Box>
-  );
-}
-
-interface SearchFiltersProps {
+export interface SearchFiltersProps {
   metadata: MetadataOptions;
   onSearch: () => void;
   variant?: 'central' | 'drawer';
@@ -132,8 +51,8 @@ export default function SearchFilters({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string>('identification');
 
-  const handleSectionToggle = (sectionId: string) => {
-    setExpandedSection(expandedSection === sectionId ? '' : sectionId);
+  const handleSectionChange = (section: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
+    setExpandedSection(isExpanded ? section : '');
   };
 
   const handleTextChange = (field: keyof SearchParams) => (
@@ -218,197 +137,229 @@ export default function SearchFilters({
         component="form" 
         onSubmit={handleSubmit}
         sx={{
-          height: variant === 'drawer' ? 'calc(100vh - 200px)' : 'auto',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          height: variant === 'drawer' ? '100%' : 'auto'
         }}
       >
-        {/* Área Scrollável */}
         <Box sx={{ 
-          flex: 1,
-          overflowY: 'auto',
-          pr: 2,
-          mr: -2,
-          pb: 2
+          flex: variant === 'drawer' ? '1 1 auto' : 'none',
+          overflowY: variant === 'drawer' ? 'auto' : 'visible'
         }}>
           {/* Identificação */}
-          <FilterSectionComponent
-            section={FILTER_SECTIONS[0]}
-            isExpanded={expandedSection === 'identification'}
-            onToggle={() => handleSectionToggle('identification')}
+          <Accordion 
+            expanded={expandedSection === 'identification'} 
+            onChange={handleSectionChange('identification')}
+            elevation={0}
+            disableGutters
           >
-            <Stack spacing={2}>
-              <TextField
-                fullWidth
-                label="Palavra-chave"
-                value={localFilters.keyword || ''}
-                onChange={handleTextChange('keyword')}
-                placeholder="Busque por palavras-chave..."
-                size="small"
-              />
-              <FormControl fullWidth size="small">
-                <InputLabel>Escala</InputLabel>
-                <Select
-                  value={localFilters.scale || ''}
-                  onChange={handleSelectChange('scale')}
-                  label="Escala"
-                >
-                  <MenuItem value="">
-                    <em>Qualquer</em>
-                  </MenuItem>
-                  {metadata.scales.map(scale => (
-                    <MenuItem key={scale} value={scale}>
-                      {scale}
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterAltIcon fontSize="small" />
+                <Typography>Identificação</Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={2}>
+                <TextField
+                  fullWidth
+                  label="Palavra-chave"
+                  value={localFilters.keyword || ''}
+                  onChange={handleTextChange('keyword')}
+                  placeholder="Busque por palavras-chave..."
+                  size="small"
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Escala</InputLabel>
+                  <Select
+                    value={localFilters.scale || ''}
+                    onChange={handleSelectChange('scale')}
+                    label="Escala"
+                  >
+                    <MenuItem value="">
+                      <em>Qualquer</em>
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl fullWidth size="small">
-                <InputLabel>Tipo de Produto</InputLabel>
-                <Select
-                  value={localFilters.productType || ''}
-                  onChange={handleSelectChange('productType')}
-                  label="Tipo de Produto"
-                >
-                  <MenuItem value="">
-                    <em>Qualquer</em>
-                  </MenuItem>
-                  {metadata.productTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      {type}
+                    {metadata.scales.map(scale => (
+                      <MenuItem key={scale} value={scale}>
+                        {scale}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Tipo de Produto</InputLabel>
+                  <Select
+                    value={localFilters.productType || ''}
+                    onChange={handleSelectChange('productType')}
+                    label="Tipo de Produto"
+                  >
+                    <MenuItem value="">
+                      <em>Qualquer</em>
                     </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-          </FilterSectionComponent>
+                    {metadata.productTypes.map(type => (
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
 
           {/* Localização */}
-          <FilterSectionComponent
-            section={FILTER_SECTIONS[1]}
-            isExpanded={expandedSection === 'location'}
-            onToggle={() => handleSectionToggle('location')}
+          <Accordion 
+            expanded={expandedSection === 'location'} 
+            onChange={handleSectionChange('location')}
+            elevation={0}
+            disableGutters
           >
-            <Stack spacing={2}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <LocationOnIcon fontSize="small" />
+                <Typography>Localização</Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={2}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Área de Suprimento</InputLabel>
+                  <Select
+                    value={localFilters.supplyArea || ''}
+                    onChange={handleSelectChange('supplyArea')}
+                    label="Área de Suprimento"
+                  >
+                    <MenuItem value="">
+                      <em>Qualquer</em>
+                    </MenuItem>
+                    {metadata.supplyAreas.map(area => (
+                      <MenuItem key={area} value={area}>
+                        {area}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <TextField
+                  fullWidth
+                  label="Estado"
+                  value={localFilters.state || ''}
+                  onChange={handleTextChange('state')}
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  label="Município"
+                  value={localFilters.city || ''}
+                  onChange={handleTextChange('city')}
+                  size="small"
+                />
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+
+          {/* Projeto */}
+          <Accordion 
+            expanded={expandedSection === 'project'} 
+            onChange={handleSectionChange('project')}
+            elevation={0}
+            disableGutters
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AccountTreeIcon fontSize="small" />
+                <Typography>Projeto</Typography>
+              </Box>
+            </AccordionSummary>
+            <AccordionDetails>
               <FormControl fullWidth size="small">
-                <InputLabel>Área de Suprimento</InputLabel>
+                <InputLabel>Projeto</InputLabel>
                 <Select
-                  value={localFilters.supplyArea || ''}
-                  onChange={handleSelectChange('supplyArea')}
-                  label="Área de Suprimento"
+                  value={localFilters.project || ''}
+                  onChange={handleSelectChange('project')}
+                  label="Projeto"
                 >
                   <MenuItem value="">
                     <em>Qualquer</em>
                   </MenuItem>
-                  {metadata.supplyAreas.map(area => (
-                    <MenuItem key={area} value={area}>
-                      {area}
+                  {metadata.projects.map(project => (
+                    <MenuItem key={project} value={project}>
+                      {project}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <TextField
-                fullWidth
-                label="Estado"
-                value={localFilters.state || ''}
-                onChange={handleTextChange('state')}
-                size="small"
-              />
-              <TextField
-                fullWidth
-                label="Município"
-                value={localFilters.city || ''}
-                onChange={handleTextChange('city')}
-                size="small"
-              />
-            </Stack>
-          </FilterSectionComponent>
-
-          {/* Projeto */}
-          <FilterSectionComponent
-            section={FILTER_SECTIONS[2]}
-            isExpanded={expandedSection === 'project'}
-            onToggle={() => handleSectionToggle('project')}
-          >
-            <FormControl fullWidth size="small">
-              <InputLabel>Projeto</InputLabel>
-              <Select
-                value={localFilters.project || ''}
-                onChange={handleSelectChange('project')}
-                label="Projeto"
-              >
-                <MenuItem value="">
-                  <em>Qualquer</em>
-                </MenuItem>
-                {metadata.projects.map(project => (
-                  <MenuItem key={project} value={project}>
-                    {project}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </FilterSectionComponent>
+            </AccordionDetails>
+          </Accordion>
 
           {/* Períodos */}
-          <FilterSectionComponent
-            section={FILTER_SECTIONS[3]}
-            isExpanded={expandedSection === 'dates'}
-            onToggle={() => handleSectionToggle('dates')}
+          <Accordion 
+            expanded={expandedSection === 'dates'} 
+            onChange={handleSectionChange('dates')}
+            elevation={0}
+            disableGutters
           >
-            <Stack spacing={3}>
-              <Box>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
-                  Período de Publicação
-                </Typography>
-                <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                  <Grid item xs={6}>
-                    <DatePicker
-                      label="Data Inicial"
-                      value={localFilters.publicationPeriod?.start ? dayjs(localFilters.publicationPeriod.start) : null}
-                      onChange={handleDateChange('start', 'publicationPeriod')}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                      format="DD/MM/YYYY"
-                    />
-                  </Grid>
-                  <Grid item xs={6}>
-                    <DatePicker
-                      label="Data Final"
-                      value={localFilters.publicationPeriod?.end ? dayjs(localFilters.publicationPeriod.end) : null}
-                      onChange={handleDateChange('end', 'publicationPeriod')}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                      format="DD/MM/YYYY"
-                    />
-                  </Grid>
-                </Grid>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CalendarTodayIcon fontSize="small" />
+                <Typography>Períodos</Typography>
               </Box>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Stack spacing={3}>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" gutterBottom>
+                    Período de Publicação
+                  </Typography>
+                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    <Grid item xs={6}>
+                      <DatePicker
+                        label="Data Inicial"
+                        value={localFilters.publicationPeriod?.start ? dayjs(localFilters.publicationPeriod.start) : null}
+                        onChange={handleDateChange('start', 'publicationPeriod')}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        format="DD/MM/YYYY"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <DatePicker
+                        label="Data Final"
+                        value={localFilters.publicationPeriod?.end ? dayjs(localFilters.publicationPeriod.end) : null}
+                        onChange={handleDateChange('end', 'publicationPeriod')}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        format="DD/MM/YYYY"
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
 
-              <Box>
-                <Typography variant="caption" color="text.secondary" gutterBottom>
-                  Período de Criação
-                </Typography>
-                <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                  <Grid item xs={6}>
-                    <DatePicker
-                      label="Data Inicial"
-                      value={localFilters.creationPeriod?.start ? dayjs(localFilters.creationPeriod.start) : null}
-                      onChange={handleDateChange('start', 'creationPeriod')}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                      format="DD/MM/YYYY"
-                    />
+                <Box>
+                  <Typography variant="caption" color="text.secondary" gutterBottom>
+                    Período de Criação
+                  </Typography>
+                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
+                    <Grid item xs={6}>
+                      <DatePicker
+                        label="Data Inicial"
+                        value={localFilters.creationPeriod?.start ? dayjs(localFilters.creationPeriod.start) : null}
+                        onChange={handleDateChange('start', 'creationPeriod')}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        format="DD/MM/YYYY"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <DatePicker
+                        label="Data Final"
+                        value={localFilters.creationPeriod?.end ? dayjs(localFilters.creationPeriod.end) : null}
+                        onChange={handleDateChange('end', 'creationPeriod')}
+                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
+                        format="DD/MM/YYYY"
+                      />
+                    </Grid>
                   </Grid>
-                  <Grid item xs={6}>
-                    <DatePicker
-                      label="Data Final"
-                      value={localFilters.creationPeriod?.end ? dayjs(localFilters.creationPeriod.end) : null}
-                      onChange={handleDateChange('end', 'creationPeriod')}
-                      slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                      format="DD/MM/YYYY"
-                    />
-                  </Grid>
-                </Grid>
-              </Box>
-            </Stack>
-          </FilterSectionComponent>
+                </Box>
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
         </Box>
 
         {/* Footer com Botões */}

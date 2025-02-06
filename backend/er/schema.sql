@@ -14,8 +14,7 @@ CREATE TABLE estados (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(50) NOT NULL,
     sigla CHAR(2) NOT NULL,
-    nome_normalizado TEXT GENERATED ALWAYS AS (normalize_text(nome)) STORED,
-    geometry GEOMETRY(MULTIPOLYGON, 4326),
+    geom GEOMETRY(MULTIPOLYGON, 4326) NOT NULL,
     CONSTRAINT uk_estados_nome UNIQUE (nome),
     CONSTRAINT uk_estados_sigla UNIQUE (sigla)
 );
@@ -24,9 +23,8 @@ CREATE TABLE estados (
 CREATE TABLE municipios (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
-    nome_normalizado TEXT GENERATED ALWAYS AS (normalize_text(nome)) STORED,
-    estado_id INTEGER REFERENCES estados(id),
-    geometry GEOMETRY(MULTIPOLYGON, 4326)
+    sigla_estado CHAR(2) NOT NULL,
+    geom GEOMETRY(MULTIPOLYGON, 4326) NOT NULL
 );
 
 -- Tabela de áreas de suprimento
@@ -34,7 +32,7 @@ CREATE TABLE areas_suprimento (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
     sigla VARCHAR(10) NOT NULL,
-    geometry GEOMETRY(MULTIPOLYGON, 4326),
+    geom GEOMETRY(MULTIPOLYGON, 4326) NOT NULL,
     CONSTRAINT uk_areas_suprimento_nome UNIQUE (nome),
     CONSTRAINT uk_areas_suprimento_sigla UNIQUE (sigla),
     CONSTRAINT ck_areas_suprimento_nome CHECK (
@@ -67,7 +65,7 @@ CREATE TABLE datasets (
     ),
     data_publicacao DATE NOT NULL,
     data_criacao DATE NOT NULL,
-    geometry GEOMETRY(POLYGON, 4326) NOT NULL,
+    geom GEOMETRY(POLYGON, 4326) NOT NULL,
     texto_busca TSVECTOR GENERATED ALWAYS AS (
         to_tsvector('portuguese', 
             nome || ' ' || 
@@ -82,16 +80,15 @@ CREATE TABLE datasets (
 CREATE INDEX idx_datasets_texto_busca ON datasets USING gin(texto_busca);
 
 -- Índice GiST para geometrias
-CREATE INDEX idx_datasets_geometry ON datasets USING gist(geometry);
-CREATE INDEX idx_estados_geometry ON estados USING gist(geometry);
-CREATE INDEX idx_municipios_geometry ON municipios USING gist(geometry);
-CREATE INDEX idx_areas_suprimento_geometry ON areas_suprimento USING gist(geometry);
+CREATE INDEX idx_datasets_geometry ON datasets USING gist(geom);
+CREATE INDEX idx_estados_geometry ON estados USING gist(geom);
+CREATE INDEX idx_municipios_geometry ON municipios USING gist(geom);
+CREATE INDEX idx_areas_suprimento_geometry ON areas_suprimento USING gist(geom);
 
 -- Índices para joins e filtros frequentes
 CREATE INDEX idx_datasets_datas ON datasets (data_publicacao, data_criacao);
 CREATE INDEX idx_datasets_filters ON datasets (escala, tipo_produto, projeto);
-CREATE INDEX idx_municipios_estado ON municipios(estado_id);
 
 -- Índices para buscas por nome normalizadas
-CREATE INDEX idx_estados_nome_normalizado ON estados(nome_normalizado);
-CREATE INDEX idx_municipios_nome_normalizado ON municipios(nome_normalizado);
+CREATE INDEX idx_estados_nome_normalizado ON estados(nome);
+CREATE INDEX idx_municipios_nome_normalizado ON municipios(nome);
