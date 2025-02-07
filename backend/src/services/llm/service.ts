@@ -31,55 +31,55 @@ const ExtractedSearchParams = z
     keyword: z
       .union([z.string(), z.undefined(), z.null()])
       .describe(
-        'Extract exact matches or partial matches for: MI (map index codes like 2965-2-NE, 2866-3, 2901, 530), INOM (nomenclature index like SF-22-Y-D-II-4), or product names. Prioritize exact matches for MI and INOM codes when found. Consider the following examples for recognition: "MI 2965-2-NE" -> "2965-2-NE", "carta SF-22" -> "SF-22", "folha 2901" -> "2901". Return the exact code or name found, without additional text.',
+        `Extract exact matches or partial matches for: MI pattern ^\d{1,4}(-[1-4](-[NS][EO])?)?$, INOM pattern ^[A-Z]{2}-\d{2}-[A-Z]-[A-Z](-[IVX]{1,6}(-[1-4](-[NS][EO])?)?)?$, Chart name: If no MI/INOM match, use as text search (ignore product type/location terms)`
       ),
 
     scale: z
       .union([z.enum(SCALES), z.undefined(), z.null()])
       .describe(
-          'Map scale. Accept variations and normalize: Large scale = 1:25.000, Medium scale = 1:100.000, Small scale = 1:250.000. Normalize formats: 25k, 25.000, 25000, 1/25.000 to 1:25.000. When multiple scales are mentioned, prioritize the largest (most detailed) one'
+        'Map scale. Accept variations and normalize: Large scale = 1:25.000, Medium scale = 1:100.000, Small scale = 1:250.000. Normalize formats: 25k, 25.000, 25000, 1/25.000 to 1:25.000. When multiple scales are mentioned, prioritize the largest (most detailed) one'
       ),
 
     productType: z
       .union([z.enum(PRODUCT_TYPES), z.undefined(), z.null()])
       .describe(
-        'Cartographic product type. Common interpretations: map or chart without qualifier = Topographic Chart, mention of image/satellite = Orthoimagery Chart, mention of thematic = Thematic Chart',
+        `Cartographic product type. Common interpretations: map or chart without qualifier = Topographic Chart, mention of image/satellite = Orthoimagery Chart, mention of thematic = Thematic Chart. When no explicit mention, evaluate context but prefer leaving undefined over assumptions."`,
       ),
 
     state: z
       .union([z.string(), z.undefined(), z.null()])
       .describe(
-        'Full name of Brazilian state. Convert abbreviations (e.g., RJ to Rio de Janeiro). When multiple states are mentioned, use the first one. Preserve proper capitalization and accents',
+        `Full name of Brazilian state. Convert abbreviations (e.g., RJ to Rio de Janeiro). When multiple states are mentioned, use the first one. Preserve proper capitalization and accents"`
       ),
 
     city: z
       .union([z.string(), z.undefined(), z.null()])
       .describe(
-        'Name of Brazilian municipality. When multiple cities are mentioned, use the first one. Preserve proper capitalization and accents',
+        `Name of Brazilian municipality. With multiple locations, use first mention. For ambiguous cities, omit state reference."`
       ),
 
     supplyArea: z
       .union([z.enum(SUPPLY_AREAS), z.undefined(), z.null()])
       .describe(
-        'Responsible Geoinformation Center. When multiple centers mentioned, use the first one. Ignore mentions without specific number',
+       `Responsible Geoinformation Center. When multiple centers mentioned, use first occurrence only. Ignore generic 'cgeo' without number. Only accept numbered references (1-5)."`
       ),
 
     project: z
       .union([z.enum(PROJECTS), z.undefined(), z.null()])
       .describe(
-        'Specific project. Normalize common variations: world cup/copa to Copa do Mundo 2014, olympics/olimpiadas to Olimpíadas. Match exact project names from the predefined list',
+        ` 'Specific project. Normalize common variations: world cup/copa to Copa do Mundo 2014, olympics/olimpiadas to Olimpíadas. Match only against predefined project list, otherwise leave undefined."`,
       ),
 
     publicationPeriod: z
       .union([DateRange, z.undefined(), z.null()])
       .describe(
-        'Publication period. Convert relative dates: recent = last 6 months, this year = current year. Use ISO format YYYY-MM-DD',
+        'Publication period. Convert relative dates to ISO format YYYY-MM-DD.  Convert relative dates: recent = last 6 months, this year = current year. Distinguish between publication and creation period by context',
       ),
 
     creationPeriod: z
       .union([DateRange, z.undefined(), z.null()])
       .describe(
-        'Creation period. Convert relative dates to ISO format YYYY-MM-DD. Handle specific periods like quarters and semesters',
+        'Creation period. Convert relative dates to ISO format YYYY-MM-DD.  Convert relative dates: recent = last 6 months, this year = current year. Distinguish between publication and creation period by context',
       ),
 
     sortField: z
@@ -139,7 +139,7 @@ export class LLMService {
           schema: ExtractedSearchParams,
           name: 'ExtractedSearchParams',
         },
-        max_retries: 3,
+        max_retries: 10,
       });
       console.log(extraction);
 
@@ -172,73 +172,101 @@ export class LLMService {
   private buildPrompt(): string {
     const today = new Date().toISOString().split('T')[0];
 
-    return `You are an expert in natural language processing specialized in extracting search parameters for cartographic data. Current date: ${today}. Let's analyze queries step by step, field by field, through a careful thought process.
-For Geoinformation Centers (supplyArea), examine the mention of Geoinformation Center. When multiple centers are mentioned, focus on the first one. Require specific number mention - generic CGEO references should be ignored.
+    return `You are an expert in natural language processing specialized in extracting search parameters for cartographic data. Current date: ${today}. 
+    
+    Here are comprehensive examples of query analysis:
 
-The keyword field requires special attention for identifying three distinct types of references. For MI (Military Index) codes, we match the pattern ^\d{1,4}(-[1-4](-[NS][EO])?)?$ which captures all valid formats: from simple digit sequences (like 530, 2901) to those with one subdivision (like 2866-3) and those with cardinal direction (like 2965-2-NE). This encompasses all MI codes where we start with 1-4 digits, optionally followed by a hyphen and a digit 1-4, and optionally ending with a cardinal direction.
-The INOM (Systematic Map Index Nomenclature) codes follow a single comprehensive pattern ^[A-Z]{2}-\d{2}-[A-Z]-[A-Z](-[IVX]{1,6}(-[1-4](-[NS][EO])?)?)?$. This pattern covers all variations: starting with two uppercase letters, two digits, and two single letters (like SF-22-Y-D), optionally extending with a roman numeral up to VI (like SF-22-Y-D-II), optionally followed by a digit 1-4 (like SF-22-Y-D-II-4), and potentially ending with a cardinal direction (like SF-22-Y-D-II-4-SE). The structure ensures each component is properly formatted while making the latter parts optional.
-For chart names, when neither MI nor INOM patterns are matched, we process the input as a potential chart name or location reference. These don't follow a specific pattern but rather serve as text search terms, allowing users to find charts by their descriptive names, geographical features, or location references they contain. The system treats these as general text search terms and applies appropriate text search algorithms to find matches.
-
-When analyzing scale, look for direct scale mentions like 1:25.000 or 25k. Consider qualitative descriptions where detailed or large scale indicates 1:25.000, medium scale suggests 1:100.000, and small or general scale points to 1:250.000. With multiple scales, always choose the most detailed one. For instance, 25k or 50k should become 1:25.000, while a detailed map implies 1:25.000.
-
-For location analysis, determine whether mentions refer to states or municipalities. Convert state abbreviations to full names and identify associated states for cities. If the city is ambiguous do not specify the state. With multiple locations, use the first mentioned.
-Project identification involves matching official project names while handling common variations. World Cup references should convert to Copa do Mundo 2014, and Olympics mentions become Olimpíadas. Always match against the predefined project list for validation.
-Date processing requires distinguishing between publication and creation dates. Convert relative periods to specific date ranges - this year means the full current year, last 6 months requires calculating the exact date range. Always output dates in ISO format (YYYY-MM-DD).
-For sorting and limits, interpret directional indicators where newest or most recent implies DESC ordering, while oldest suggests ASC. Handle numeric limits explicitly, converting some to 5 and interpreting all as unlimited.
-For each analysis, ask what specific words or phrases support each extraction decision. Consider multiple interpretations and choose the most confident one. Document your reasoning, explaining how each conclusion was reached. Always prioritize precision over completeness - leave fields undefined when confidence is low.
-Here are comprehensive examples of query analysis:
-Query: "preciso da carta MI 2965-2-NE do segundo cgeo"
+Query: "preciso da orto MI 2965-2-NE do segundo cgeo"
 {
-"reasoning": "Found exact MI code '2965-2-NE'. 'segundo cgeo' reference normalizes to standard name.",
-"keyword": "2965-2-NE",
-"supplyArea": "2° Centro de Geoinformação",
-"productType": "Carta Topográfica"
+  "reasoning": "'Orto' refers to 'Carta Ortoimagem' a product type. Found supply area from 'segundo cgeo'. Identified valid MI code '2965-2-NE'.",
+  "keyword": "2965-2-NE",
+  "supplyArea": "2° Centro de Geoinformação",
+  "productType": "Carta Ortoimagem"
 }
+
 Query: "buscar folha SF-22-Y-D-II-4 do RS publicada esse ano"
 {
-"reasoning": "Found exact INOM code 'SF-22-Y-D-II-4'. Location 'RS' converts to Rio Grande do Sul. Time period 'this year' translates to full 2025 range.",
-"keyword": "SF-22-Y-D-II-4",
-"state": "Rio Grande do Sul",
-"publicationPeriod": {
-"start": "2025-01-01",
-"end": "2025-12-31"
+  "reasoning": "Found state reference 'RS' for Rio Grande do Sul. 'Folha' commonly refers to 'Carta Topográfica', a product type. Identified complete INOM code 'SF-22-Y-D-II-4'. Publication period set to current year 2025.",
+  "keyword": "SF-22-Y-D-II-4",
+  "state": "Rio Grande do Sul",
+  "productType": "Carta Topográfica",
+  "publicationPeriod": {
+    "start": "2025-01-01",
+    "end": "2025-12-31"
+  }
 }
-}
-Query: "carta topográfica Passo da Seringueira em 1:25.000"
+
+Query: "carta topográfica Passo da Seringueira em grande escala"
 {
-"reasoning": "Name reference 'Passo da Seringueira' for keyword. Scale explicitly mentioned as 1:25.000. Product type directly specified as topográfica.",
-"keyword": "Passo da Seringueira",
-"scale": "1:25.000",
-"productType": "Carta Topográfica"
+  "reasoning": "Explicit product type 'topográfica'. 'grande escala' refers to '1:25.000'. No MI/INOM pattern found, using 'Passo da Seringueira' as chart name.",
+  "keyword": "Passo da Seringueira",
+  "scale": "1:25.000",
+  "productType": "Carta Topográfica"
 }
-Query: "MI 530 mais nova do primeiro cgeo"
+
+Query: "carta temática do projeto olimpíadas SF-22-Y-D-II"
 {
-"reasoning": "Found MI code '530'. 'primeiro cgeo' reference normalizes to standard name.  'mais novas' indicates descending sort.",
-"keyword": "530",
-"supplyArea": "1° Centro de Geoinformação",
-"sortField": "publicationDate",
-"sortDirection": "DESC"
+  "reasoning": "Identified project 'Olimpíadas'. Found complete INOM code 'SF-22-Y-D-II'. 'carta temática' is a product type.",
+  "keyword": "SF-22-Y-D-II",
+  "productType": "Carta Temática",
+  "project": "Olimpíadas"
 }
-Query: "cartas mais recentes com inom SF-22"
+
+Query: "MI 2901 de porto alegre com data de criação mais antiga"
 {
-"reasoning": "Partial INOM code 'SF-22' identified. 'mais recentes' indicates sort by publication date descending.",
-"keyword": "SF-22",
-"sortField": "publicationDate",
-"sortDirection": "DESC"
+  "reasoning": "Found city 'Porto Alegre'. Identified MI '2901'. Term 'mais antiga' with 'data de criação' sets ascending creation date sort.",
+  "keyword": "2901",
+  "city": "Porto Alegre",
+  "sortField": "creationDate",
+  "sortDirection": "ASC"
 }
-Query: "carta do projeto olimpíadas SF-22-Y-D-II"
+
+Query: "cartas de pequena escala do projeto Copa do Mundo em São Paulo"
 {
-"reasoning": "Found INOM code 'SF-22-Y-D-II'. Project 'olimpíadas' normalizes to 'Olimpíadas'",
-"keyword": "SF-22-Y-D-II",
-"project": "Olimpíadas"
+  "reasoning": "Term 'Copa do Mundo' matches project list exactly, should not be treated as keyword. 'Cartas' commonly refers to 'Carta Topográfica', a product type. 'pequena escala' refers to '1:250.000' São Paulo' is location reference. No valid MI/INOM pattern or chart name found.",
+  "project": "Copa do Mundo 2014",
+  "productType": "Carta Topográfica",
+  "scale": "1:250.000",
+  "state": "São Paulo"
 }
-Query: "MI 2901 de são paulo com data de criação mais antiga"
+
+Query: "buscar carta ortoimagem de média escala de Manaus"
 {
-"reasoning": "Found MI code '2901'. Location 'são paulo' converts to full state name. Sort by creation date with 'mais antiga' indicating ascending order.",
-"keyword": "2901",
-"state": "São Paulo",
-"sortField": "creationDate",
-"sortDirection": "ASC"
+  "reasoning": "Term 'ortoimagem' defines product type. 'Média escala' refers to '1:100.000' scale. 'Manaus' is city reference, not a chart name. No MI/INOM patterns found. Without specific chart name beyond location, no keyword is set.",
+  "productType": "Carta Ortoimagem",
+  scale": "1:100.000"
+  "city": "Manaus"
+}
+  
+Query: "mapas detalhados produzidos entre julho e dezembro do ano passado"
+{
+  "reasoning": "'Detalhado' refers to '1:25.000' scale. Terms 'produzidos/produção/elaborados' indicate creation date, not publication. 'ano passado' refers to 2024, with specific months 'julho' to 'dezembro'.",
+  "scale": "1:25.000",
+  "creationPeriod": {
+    "start": "2024-07-01",
+    "end": "2024-12-31"
+  }
+}
+  
+Query: "cartas topo publicadas em 2023 do quinto cgeo em mg e es em media ou pequena escala"
+{
+  "reasoning": "Found product type 'carta topo' for Carta Topográfica. Publication period for '2023' full year. Supply area from 'quinto cgeo'. Term 'media ou pequena' scale defaults to the more detailed, medium, which means 1:100.000. Multiple states mentioned but using first (MG).",
+  "productType": "Carta Topográfica",
+  "publicationPeriod": {
+    "start": "2023-01-01",
+    "end": "2023-12-31"
+  },
+  "supplyArea": "5° Centro de Geoinformação",
+  "state": "Minas Gerais",
+  "scale": "1:100.000"
+}
+  
+Query: "imagens de satelite de rondonia e acre em grande escala"
+{
+  "reasoning": "Term 'imagens de satelite' indicates Carta Ortoimagem. 'grande escala' translates to 1:25.000. Multiple states mentioned but using first (Rondônia).",
+  "productType": "Carta Ortoimagem",
+  "state": "Rondônia",
+  "scale": "1:25.000"
 }`;
   }
 }
