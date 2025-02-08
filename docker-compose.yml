@@ -1,0 +1,64 @@
+services:
+  backend:
+    build: ./backend
+    depends_on:
+      - postgres
+      - ollama
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  postgres:
+    image: postgis/postgis
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    env_file:
+      - postgres/.env
+    networks:
+      - app-network
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama_models:/root/.ollama/models
+      - ./ollama/entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    networks:
+      - app-network
+    deploy: # Seção deploy para configurar GPU
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia # Especifica o driver NVIDIA
+              count: 1 # Quantas GPUs você quer usar (geralmente 1)
+              capabilities: [gpu] # Requer a capacidade 'gpu'
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "8080:80" # Nginx exposto na porta 8080
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf # Monta o arquivo de configuração
+    depends_on:
+      - frontend
+      - backend
+      - ollama
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: app-network
+
+volumes:
+  postgres_data:
+  ollama_models:
