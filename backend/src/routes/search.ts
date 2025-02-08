@@ -17,6 +17,7 @@ import {
   SORT_DIRECTIONS,
 } from '../types/api.js';
 import type { ApiError } from '../types/errors.js';
+import { validateExtractedParams } from '../services/llm/validator.js';
 
 const router = Router();
 const searchService = new SearchService();
@@ -30,9 +31,12 @@ router.post(
       const { query, bbox } = req.body;
 
       // Process natural language query
-      const { searchParams, preprocessedText } = await llmService.processQuery({
-        query,
-      });
+      const { searchParams: extractedParams, preprocessedText } =
+        await llmService.processQuery({
+          query,
+        });
+
+      const searchParams = await validateExtractedParams(extractedParams);
 
       const searchResults = await searchService.search({
         searchParams,

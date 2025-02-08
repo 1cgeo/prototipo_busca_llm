@@ -8,37 +8,40 @@ import {
   SORT_FIELDS,
   SORT_DIRECTIONS,
 } from '../../types/api.js';
+import ValidationService from '../../services/validation.js';
 
+const validationService = new ValidationService();
+
+/**
+ * Validates MI (Military Index) code format
+ */
 function isValidMI(mi: string): boolean {
-  // Remove espaços e converte para maiúsculo para padronização
   mi = mi.trim().toUpperCase();
 
   // MI 25k: XXXX-X-(NO|NE|SO|SE)
-  // Ex: 2965-2-NE, 123-1-SO, 1-2-SE
   const mi25kPattern = /^\d{1,4}-[1-4]-(NO|NE|SO|SE)$/;
 
   // MI 50k: XXXX-X
-  // Ex: 2866-3, 123-1, 1-4
   const mi50kPattern = /^\d{1,4}-[1-4]$/;
 
   // MI 100k: XXXX
-  // Ex: 2901, 123, 45, 1
   const mi100kPattern = /^\d{1,4}$/;
 
   // MI 250k: XXX
-  // Ex: 530, 12, 1
   const mi250kPattern = /^\d{1,3}$/;
 
-  if (mi25kPattern.test(mi)) return true;
-  if (mi50kPattern.test(mi)) return true;
-  if (mi100kPattern.test(mi)) return true;
-  if (mi250kPattern.test(mi)) return true;
-
-  return false;
+  return (
+    mi25kPattern.test(mi) ||
+    mi50kPattern.test(mi) ||
+    mi100kPattern.test(mi) ||
+    mi250kPattern.test(mi)
+  );
 }
 
+/**
+ * Validates INOM (Systematic Map Index Nomenclature) code format
+ */
 function isValidINOM(inom: string): boolean {
-  // Remove espaços e converte para maiúsculo para padronização
   inom = inom.trim().toUpperCase();
 
   // Componentes básicos do INOM
@@ -57,37 +60,56 @@ function isValidINOM(inom: string): boolean {
   const inom25kPattern =
     /^[A-Z]{2}-\d{2}-[A-Z]-[A-Z]-[IVX]{1,6}-[1-4]-(NO|NE|SO|SE)$/;
 
-  // Verifica primeiro se tem o formato base
-  if (!baseINOM.test(inom)) return false;
-
-  // Verifica cada padrão específico
-  if (inom25kPattern.test(inom)) return true;
-  if (inom50kPattern.test(inom)) return true;
-  if (inom100kPattern.test(inom)) return true;
-  if (inom250kPattern.test(inom)) return true;
-
-  return false;
+  return (
+    baseINOM.test(inom) &&
+    (inom250kPattern.test(inom) ||
+      inom100kPattern.test(inom) ||
+      inom50kPattern.test(inom) ||
+      inom25kPattern.test(inom))
+  );
 }
 
-export function validateExtractedParams(
+/**
+ * Validates the keyword field for MI or INOM patterns
+ */
+function validateKeyword(keyword: string): string | null {
+  const normalizedKeyword = keyword.trim().toUpperCase();
+
+  if (isValidMI(normalizedKeyword) || isValidINOM(normalizedKeyword)) {
+    return normalizedKeyword;
+  }
+
+  // If it looks like an MI or INOM but isn't valid, return null
+  const miPattern = /^\d{1,4}(-[1-4](-[NS][EO])?)?$/;
+  const inomPattern = /^[A-Z]{2}-\d{2}/;
+
+  if (
+    miPattern.test(normalizedKeyword) ||
+    inomPattern.test(normalizedKeyword)
+  ) {
+    logger.warn(`Invalid MI/INOM code: ${normalizedKeyword}`);
+    return null;
+  }
+
+  // If it's not trying to be an MI or INOM, return as is
+  return keyword;
+}
+
+export async function validateExtractedParams(
   params: Record<string, any>,
-): SearchParams {
+): Promise<SearchParams> {
   const validatedParams: Partial<SearchParams> = {};
 
   try {
-    // Validação do keyword - agora inclui validação de MI e INOM
+    // Validate keyword (MI/INOM pattern validation)
     if (typeof params.keyword === 'string') {
-      const keyword = params.keyword.trim();
-      // Verifica se é um MI ou INOM válido
-      if (isValidMI(keyword) || isValidINOM(keyword)) {
-        validatedParams.keyword = keyword;
-      } else {
-        // Se não for MI ou INOM, aceita como keyword normal
-        validatedParams.keyword = keyword;
+      const validatedKeyword = validateKeyword(params.keyword);
+      if (validatedKeyword !== null) {
+        validatedParams.keyword = validatedKeyword;
       }
     }
 
-    // Validação de campos simples string/number
+    // Basic type validations
     if (typeof params.state === 'string') {
       validatedParams.state = params.state;
     }
@@ -96,7 +118,7 @@ export function validateExtractedParams(
       validatedParams.city = params.city;
     }
 
-    // Validação de enums
+    // Validate enums
     if (params.scale && SCALES.includes(params.scale)) {
       validatedParams.scale = params.scale;
     }
@@ -113,7 +135,7 @@ export function validateExtractedParams(
       validatedParams.project = params.project;
     }
 
-    // Validação de campos de ordenação
+    // Validate sorting fields
     if (params.sortField && SORT_FIELDS.includes(params.sortField)) {
       validatedParams.sortField = params.sortField;
     } else {
@@ -129,7 +151,7 @@ export function validateExtractedParams(
       validatedParams.sortDirection = 'DESC'; // valor default
     }
 
-    // Validação do limite
+    // Validate limit
     if (
       typeof params.limit === 'number' &&
       params.limit > 0 &&
@@ -138,7 +160,7 @@ export function validateExtractedParams(
       validatedParams.limit = params.limit;
     }
 
-    // Validação de períodos de data
+    // Validate date periods
     if (params.publicationPeriod) {
       if (isValidDatePeriod(params.publicationPeriod)) {
         validatedParams.publicationPeriod = params.publicationPeriod;
@@ -151,16 +173,20 @@ export function validateExtractedParams(
       }
     }
 
+    // Validate locations against database
+    const dbValidatedParams =
+      await validationService.validateLocations(validatedParams);
+
     logger.debug(
       {
         stage: 'params_validation',
         input: params,
-        output: validatedParams,
+        output: dbValidatedParams,
       },
       'Parameters validation complete',
     );
 
-    return validatedParams as SearchParams;
+    return dbValidatedParams as SearchParams;
   } catch (error) {
     logger.error(
       {
