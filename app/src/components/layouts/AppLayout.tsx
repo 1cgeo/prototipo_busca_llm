@@ -26,13 +26,6 @@ const DRAWER_WIDTH = '40%';
 const DRAWER_MIN_WIDTH = 400;
 const DRAWER_MAX_WIDTH = 600;
 
-const pulseAnimation = keyframes`
-  0% { opacity: 0.7; }
-  50% { opacity: 1; }
-  100% { opacity: 0.7; }
-`;
-
- 
 export interface AppLayoutProps {}
 
 export default function AppLayout(_props: AppLayoutProps) {
@@ -42,6 +35,24 @@ export default function AppLayout(_props: AppLayoutProps) {
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [zoomToFeature, setZoomToFeature] = useState<(geometry: GeoJSON.Polygon) => void>();
   const theme = useTheme();
+
+  const pulseAnimation = keyframes`
+    0% {
+      transform: scale(1) translateX(-50%);
+      background-color: ${theme.palette.background.paper};
+      box-shadow: 0 4px 20px ${theme.palette.primary.main}20;
+    }
+    50% {
+      transform: scale(1.15) translateX(-50%);
+      background-color: ${theme.palette.primary.light};
+      box-shadow: 0 4px 30px ${theme.palette.primary.main}66;
+    }
+    100% {
+      transform: scale(1) translateX(-50%);
+      background-color: ${theme.palette.background.paper};
+      box-shadow: 0 4px 20px ${theme.palette.primary.main}40;
+    }
+  `;
 
   const handleSearch = () => {
     setShowResults(true);
@@ -113,25 +124,35 @@ export default function AppLayout(_props: AppLayoutProps) {
           <Box
             sx={{
               position: 'absolute',
-              top: 16,
+              top: 24,
               left: '50%',
               transform: 'translateX(-50%)',
-              zIndex: theme.zIndex.fab,
-              animation: `${pulseAnimation} 2s infinite ease-in-out`
+              zIndex: theme.zIndex.fab
             }}
           >
             <Tooltip title="Abrir busca">
               <IconButton
                 onClick={() => setShowSearchPanel(true)}
+                size="large"
                 sx={{
-                  bgcolor: theme.palette.background.paper,
-                  boxShadow: theme.shadows[2],
+                  width: 32,
+                  height: 32,
+                  transition: 'all 0.2s ease-in-out',
+                  animation: `${pulseAnimation} 2s infinite ease-in-out`,
                   '&:hover': {
-                    bgcolor: theme.palette.action.hover
+                    bgcolor: theme.palette.primary.main,
+                    transform: 'scale(1.05) translateX(-48%)',
+                    boxShadow: theme.shadows[8],
+                    '& .MuiSvgIcon-root': {
+                      color: 'white'
+                    }
                   }
                 }}
               >
-                <SearchIcon sx={{ color: theme.palette.primary.main }} />
+                <SearchIcon sx={{ 
+                  color: theme.palette.primary.main,
+                  fontSize: 24 
+                }} />
               </IconButton>
             </Tooltip>
           </Box>
@@ -159,26 +180,34 @@ export default function AppLayout(_props: AppLayoutProps) {
         </Fade>
 
         <Drawer
-          variant="temporary"
+          variant="persistent"
           anchor="left"
           open={showResults}
-          onClose={() => setShowResults(false)}
+          hideBackdrop
           sx={{
             width: DRAWER_WIDTH,
             minWidth: DRAWER_MIN_WIDTH,
             maxWidth: DRAWER_MAX_WIDTH,
+            height: `calc(100% - ${TOOLBAR_HEIGHT}px)`,
             '& .MuiDrawer-paper': {
               width: DRAWER_WIDTH,
               minWidth: DRAWER_MIN_WIDTH,
               maxWidth: DRAWER_MAX_WIDTH,
               height: `calc(100% - ${TOOLBAR_HEIGHT}px)`,
               top: TOOLBAR_HEIGHT,
-              bgcolor: theme.palette.background.paper,
               borderRight: `1px solid ${theme.palette.divider}`,
-              boxShadow: theme.shadows[3]
+              boxShadow: theme.shadows[3],
+              bgcolor: theme.palette.background.paper
             },
+            '& + .MuiBackdrop-root': {
+              display: 'none'
+            }
           }}
-          keepMounted
+          ModalProps={{
+            keepMounted: true,
+            disableEnforceFocus: true,
+            disableAutoFocus: true
+          }}
         >
           <ResultsPanel 
             onNewSearch={handleNewSearch}

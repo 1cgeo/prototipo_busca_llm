@@ -22,25 +22,26 @@ export class SearchService {
       const params: any[] = [];
       let paramCount = 1;
 
+      // Ensure searchParams is initialized
+      searchParams = searchParams || {};
+
       // Keyword search - now includes MI and INOM
       if (searchParams.keyword) {
         conditions.push(`(
           texto_busca @@ websearch_to_tsquery('portuguese', $${paramCount})
           OR CASE 
-            -- Verifica correspondência exata para MI e INOM
             WHEN $${paramCount + 1} ~ '^([0-9]{1,4}-[1-4]-(NO|NE|SO|SE)|[0-9]{1,4}-[1-4]|[0-9]{1,4}|[0-9]{1,3})$'
               THEN mi = $${paramCount + 1}
             WHEN $${paramCount + 1} ~ '^[A-Z]{2}-[0-9]{2}(-[A-Z]-[A-Z](-[IVX]{1,6}(-[1-4](-[NS][EO])?)?)?)?$'
               THEN inom = $${paramCount + 1}
-            -- Se não for MI ou INOM, faz busca por LIKE no nome
             ELSE lower(nome) LIKE lower($${paramCount + 2})
           END
         )`);
 
         params.push(
-          searchParams.keyword, // Para busca em texto_busca
-          searchParams.keyword, // Para comparação exata MI/INOM
-          `%${searchParams.keyword}%`, // Para LIKE em nome
+          searchParams.keyword,
+          searchParams.keyword,
+          `%${searchParams.keyword}%`,
         );
         paramCount += 3;
       }
@@ -139,16 +140,18 @@ export class SearchService {
       const whereClause =
         conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
-      // Sorting
+      // Sorting with default values
       const orderField =
         searchParams.sortField === 'creationDate'
           ? 'data_criacao'
           : 'data_publicacao';
-      const orderClause = `ORDER BY ${orderField} ${searchParams.sortDirection}`;
+      const orderDirection = searchParams.sortDirection || 'DESC';
+      const orderClause = `ORDER BY ${orderField} ${orderDirection}`;
 
-      // Pagination
-      const offset = (pagination.page - 1) * pagination.limit;
-      const limitClause = `LIMIT ${pagination.limit} OFFSET ${offset}`;
+      // Pagination with default values
+      const limit = pagination.limit || 10;
+      const offset = ((pagination.page || 1) - 1) * limit;
+      const limitClause = `LIMIT ${limit} OFFSET ${offset}`;
 
       // Count query
       const countQuery = `
@@ -197,9 +200,9 @@ export class SearchService {
         items,
         metadata: {
           total: total.total,
-          page: pagination.page,
-          limit: pagination.limit,
-          totalPages: Math.ceil(total.total / pagination.limit),
+          page: pagination.page || 1,
+          limit,
+          totalPages: Math.ceil(total.total / limit),
           processedQuery: searchParams,
         },
       };
@@ -208,7 +211,7 @@ export class SearchService {
         { error, searchParams, pagination },
         'Error executing search',
       );
-      throw new Error('Error executing search');
+      throw error;
     }
   }
 }

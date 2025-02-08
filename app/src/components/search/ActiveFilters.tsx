@@ -5,16 +5,12 @@ import TuneIcon from '@mui/icons-material/Tune';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import PlaceIcon from '@mui/icons-material/Place';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
+import SortIcon from '@mui/icons-material/Sort';
+import SearchIcon from '@mui/icons-material/Search';
 
 export default function ActiveFilters() {
-  const { state, setFilters } = useSearch();
+  const { state } = useSearch();
   const { filters } = state;
-
-  const handleRemoveFilter = (field: keyof typeof filters) => {
-    const newFilters = { ...filters };
-    delete newFilters[field];
-    setFilters(newFilters);
-  };
 
   // Check if there are any active filters
   const hasActiveFilters = Object.values(filters).some(value => 
@@ -32,75 +28,97 @@ export default function ActiveFilters() {
       </Typography>
       
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+        {/* Palavra-chave */}
+        {filters.keyword && (
+          <Chip
+            size="small"
+            icon={<SearchIcon />}
+            label={`Busca: ${filters.keyword}`}
+          />
+        )}
+
+        {/* Escala */}
         {filters.scale && (
           <Chip
             size="small"
             icon={<MapIcon />}
             label={`Escala: ${filters.scale}`}
-            onDelete={() => handleRemoveFilter('scale')}
           />
         )}
 
+        {/* Tipo de Produto */}
         {filters.productType && (
           <Chip
             size="small"
             icon={<TuneIcon />}
             label={`Tipo: ${filters.productType}`}
-            onDelete={() => handleRemoveFilter('productType')}
           />
         )}
 
+        {/* Estado */}
         {filters.state && (
           <Chip
             size="small"
             icon={<PlaceIcon />}
             label={`Estado: ${filters.state}`}
-            onDelete={() => handleRemoveFilter('state')}
           />
         )}
 
+        {/* Cidade */}
         {filters.city && (
           <Chip
             size="small"
             icon={<PlaceIcon />}
             label={`Cidade: ${filters.city}`}
-            onDelete={() => handleRemoveFilter('city')}
           />
         )}
 
+        {/* Projeto */}
         {filters.project && (
           <Chip
             size="small"
             icon={<AccountTreeIcon />}
             label={`Projeto: ${filters.project}`}
-            onDelete={() => handleRemoveFilter('project')}
           />
         )}
 
+        {/* Área de Suprimento */}
         {filters.supplyArea && (
           <Chip
             size="small"
             icon={<TuneIcon />}
             label={`Área: ${filters.supplyArea}`}
-            onDelete={() => handleRemoveFilter('supplyArea')}
           />
         )}
 
+        {/* Período de Publicação */}
         {filters.publicationPeriod && (
           <Chip
             size="small"
             icon={<CalendarTodayIcon />}
             label={`Publicação: ${new Date(filters.publicationPeriod.start).toLocaleDateString()} - ${new Date(filters.publicationPeriod.end).toLocaleDateString()}`}
-            onDelete={() => handleRemoveFilter('publicationPeriod')}
           />
         )}
 
+        {/* Período de Criação */}
         {filters.creationPeriod && (
           <Chip
             size="small"
             icon={<CalendarTodayIcon />}
             label={`Criação: ${new Date(filters.creationPeriod.start).toLocaleDateString()} - ${new Date(filters.creationPeriod.end).toLocaleDateString()}`}
-            onDelete={() => handleRemoveFilter('creationPeriod')}
+          />
+        )}
+
+        {/* Ordenação (campo + direção como um único chip) */}
+        {filters.sortField && (
+          <Chip
+            size="small"
+            icon={<SortIcon />}
+            label={`Ordenar por: ${
+              filters.sortField === 'publicationDate' ? 'Data de Publicação' : 'Data de Criação'
+            } (${
+              filters.sortDirection === 'DESC' ? 'Mais recente' : 'Mais antigo'
+            })`}
           />
         )}
       </Box>

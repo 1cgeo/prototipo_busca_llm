@@ -121,6 +121,7 @@ export interface PaginationInfo {
   page: number;
   limit: number;
   totalPages: number;
+  availableLimits?: number[];
 }
 
 export interface SearchState {

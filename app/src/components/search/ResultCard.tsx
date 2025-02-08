@@ -3,12 +3,13 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Box,
   Chip,
   IconButton,
   Tooltip,
-  alpha
+  alpha,
+  Stack,
+  Divider
 } from '@mui/material';
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -43,25 +44,42 @@ export default function ResultCard({ result, onZoomTo }: ResultCardProps) {
         }
       }}
     >
-      <CardContent>
+      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+        {/* Header with Title and Zoom Button */}
         <Box sx={{ 
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: 1,
-          mb: 1
+          mb: 1.5
         }}>
-          <Typography 
-            variant="h6" 
-            component="h3"
-            sx={{ 
-              fontSize: '1rem',
-              fontWeight: 500,
-              lineHeight: 1.4
-            }}
-          >
-            {result.name}
-          </Typography>
+          <Box sx={{ flex: 1 }}>
+            <Typography 
+              variant="subtitle1"
+              component="h3"
+              sx={{ 
+                fontWeight: 500,
+                lineHeight: 1.3,
+                mb: 0.5
+              }}
+            >
+              {result.name}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <PlaceIcon sx={{ fontSize: 16, color: 'action.active' }} />
+                <Typography variant="caption" color="text.secondary">
+                  {result.scale}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <CalendarTodayIcon sx={{ fontSize: 16, color: 'action.active' }} />
+                <Typography variant="caption" color="text.secondary">
+                  {formattedDate}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
 
           {onZoomTo && (
             <Tooltip title="Zoom para área">
@@ -82,65 +100,47 @@ export default function ResultCard({ result, onZoomTo }: ResultCardProps) {
           )}
         </Box>
 
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{
-            mb: 2,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            minHeight: '2.5em'
-          }}
-        >
-          {result.description}
-        </Typography>
+        {/* Divider */}
+        <Divider sx={{ my: 1 }} />
 
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <CalendarTodayIcon 
-                fontSize="small" 
-                sx={{ color: 'action.active' }} 
-              />
-              <Typography variant="body2" color="text.secondary">
-                {formattedDate}
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={12} sm={6}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <PlaceIcon 
-                fontSize="small" 
-                sx={{ color: 'action.active' }} 
-              />
-              <Typography variant="body2" color="text.secondary">
-                {result.scale}
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
+        {/* Description and Tags */}
+        <Stack spacing={1.5}>
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              lineHeight: 1.4
+            }}
+          >
+            {result.description}
+          </Typography>
 
-        <Box sx={{ 
-          display: 'flex', 
-          gap: 1, 
-          flexWrap: 'wrap' 
-        }}>
-          <Chip
-            icon={<MapIcon />}
-            label={result.productType}
-            color="primary"
-            variant="outlined"
-            size="small"
-          />
-          <Chip
-            label={result.project}
-            color="secondary"
-            variant="outlined"
-            size="small"
-          />
-        </Box>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: 1,
+            flexWrap: 'wrap'
+          }}>
+            <Chip
+              icon={<MapIcon sx={{ fontSize: 16 }} />}
+              label={result.productType}
+              color="primary"
+              variant="outlined"
+              size="small"
+              sx={{ height: 24 }}
+            />
+            <Chip
+              label={result.project}
+              color="secondary"
+              variant="outlined"
+              size="small"
+              sx={{ height: 24 }}
+            />
+          </Box>
+        </Stack>
       </CardContent>
     </Card>
   );

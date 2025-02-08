@@ -4,42 +4,72 @@ import { structuredSearch } from '@/services/api';
 import { MetadataOptions, SearchParams } from '@/types/search';
 import {
   Box,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Button,
-  Grid,
-  Typography,
-  SelectChangeEvent,
   Alert,
-  Stack,
   CircularProgress,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails
+  Stack,
+  SelectChangeEvent,
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
+
+// Icons
 import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SortIcon from '@mui/icons-material/Sort';
 
-dayjs.locale('pt-br');
+// Componentes de filtro
+import FilterSection from './filters/FilterSection';
+import IdentificationFilters from './filters/IdentificationFilters';
+import LocationFilters from './filters/LocationFilters';
+import ProjectFilters from './filters/ProjectFilters';
+import DateFilters from './filters/DateFilters';
+import SortingFilters from './filters/SortingFilters';
 
-export interface SearchFiltersProps {
+interface SearchFiltersProps {
   metadata: MetadataOptions;
   onSearch: () => void;
   variant?: 'central' | 'drawer';
 }
+
+const SECTIONS = [
+  {
+    id: 'identification',
+    title: 'Identificação',
+    icon: <FilterAltIcon fontSize="small" />,
+    fields: ['keyword', 'scale', 'productType'] as const
+  },
+  {
+    id: 'location',
+    title: 'Localização',
+    icon: <LocationOnIcon fontSize="small" />,
+    fields: ['supplyArea', 'state', 'city'] as const
+  },
+  {
+    id: 'project',
+    title: 'Projeto',
+    icon: <AccountTreeIcon fontSize="small" />,
+    fields: ['project'] as const
+  },
+  {
+    id: 'dates',
+    title: 'Períodos',
+    icon: <CalendarTodayIcon fontSize="small" />,
+    fields: ['publicationPeriod', 'creationPeriod'] as const
+  },
+  {
+    id: 'sorting',
+    title: 'Ordenação',
+    icon: <SortIcon fontSize="small" />,
+    fields: ['sortField', 'sortDirection'] as const
+  }
+] as const;
 
 export default function SearchFilters({ 
   metadata, 
@@ -50,6 +80,20 @@ export default function SearchFilters({
   const [localFilters, setLocalFilters] = useState<SearchParams>(state.filters);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [expandedSection, setExpandedSection] = useState<string>('identification');
+
+  const getActiveFiltersCount = (fields: readonly (keyof SearchParams)[]) => {
+    return fields.reduce((count, field) => {
+      const value = localFilters[field];
+      
+      if (field === 'sortDirection') return count;
+      if (!value) return count;
+
+      if (field === 'publicationPeriod' || field === 'creationPeriod') return count + 1;
+      if (field === 'sortField') return count + 1;
+      
+      return count + 1;
+    }, 0);
+  };
 
   const handleSectionChange = (section: string) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
     setExpandedSection(isExpanded ? section : '');
@@ -131,6 +175,28 @@ export default function SearchFilters({
     setLocalFilters({});
   };
 
+  const renderFilterSection = (section: typeof SECTIONS[number]) => {
+    const components = {
+      identification: IdentificationFilters,
+      location: LocationFilters,
+      project: ProjectFilters,
+      dates: DateFilters,
+      sorting: SortingFilters
+    };
+
+    const Component = components[section.id as keyof typeof components];
+    
+    return (
+      <Component
+        filters={localFilters}
+        metadata={metadata}
+        onTextChange={handleTextChange}
+        onSelectChange={handleSelectChange}
+        onDateChange={handleDateChange}
+      />
+    );
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
       <Box 
@@ -146,223 +212,23 @@ export default function SearchFilters({
           flex: variant === 'drawer' ? '1 1 auto' : 'none',
           overflowY: variant === 'drawer' ? 'auto' : 'visible'
         }}>
-          {/* Identificação */}
-          <Accordion 
-            expanded={expandedSection === 'identification'} 
-            onChange={handleSectionChange('identification')}
-            elevation={0}
-            disableGutters
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <FilterAltIcon fontSize="small" />
-                <Typography>Identificação</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
+          {SECTIONS.map((section) => (
+            <FilterSection
+              key={section.id}
+              id={section.id}
+              title={section.title}
+              icon={section.icon}
+              activeFilters={getActiveFiltersCount(section.fields)}
+              expanded={expandedSection === section.id}
+              onChange={handleSectionChange}
+            >
               <Stack spacing={2}>
-                <TextField
-                  fullWidth
-                  label="Palavra-chave"
-                  value={localFilters.keyword || ''}
-                  onChange={handleTextChange('keyword')}
-                  placeholder="Busque por palavras-chave..."
-                  size="small"
-                />
-                <FormControl fullWidth size="small">
-                  <InputLabel>Escala</InputLabel>
-                  <Select
-                    value={localFilters.scale || ''}
-                    onChange={handleSelectChange('scale')}
-                    label="Escala"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
-                    </MenuItem>
-                    {metadata.scales.map(scale => (
-                      <MenuItem key={scale} value={scale}>
-                        {scale}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Tipo de Produto</InputLabel>
-                  <Select
-                    value={localFilters.productType || ''}
-                    onChange={handleSelectChange('productType')}
-                    label="Tipo de Produto"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
-                    </MenuItem>
-                    {metadata.productTypes.map(type => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                {renderFilterSection(section)}
               </Stack>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Localização */}
-          <Accordion 
-            expanded={expandedSection === 'location'} 
-            onChange={handleSectionChange('location')}
-            elevation={0}
-            disableGutters
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <LocationOnIcon fontSize="small" />
-                <Typography>Localização</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Área de Suprimento</InputLabel>
-                  <Select
-                    value={localFilters.supplyArea || ''}
-                    onChange={handleSelectChange('supplyArea')}
-                    label="Área de Suprimento"
-                  >
-                    <MenuItem value="">
-                      <em>Qualquer</em>
-                    </MenuItem>
-                    {metadata.supplyAreas.map(area => (
-                      <MenuItem key={area} value={area}>
-                        {area}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <TextField
-                  fullWidth
-                  label="Estado"
-                  value={localFilters.state || ''}
-                  onChange={handleTextChange('state')}
-                  size="small"
-                />
-                <TextField
-                  fullWidth
-                  label="Município"
-                  value={localFilters.city || ''}
-                  onChange={handleTextChange('city')}
-                  size="small"
-                />
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Projeto */}
-          <Accordion 
-            expanded={expandedSection === 'project'} 
-            onChange={handleSectionChange('project')}
-            elevation={0}
-            disableGutters
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AccountTreeIcon fontSize="small" />
-                <Typography>Projeto</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <FormControl fullWidth size="small">
-                <InputLabel>Projeto</InputLabel>
-                <Select
-                  value={localFilters.project || ''}
-                  onChange={handleSelectChange('project')}
-                  label="Projeto"
-                >
-                  <MenuItem value="">
-                    <em>Qualquer</em>
-                  </MenuItem>
-                  {metadata.projects.map(project => (
-                    <MenuItem key={project} value={project}>
-                      {project}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </AccordionDetails>
-          </Accordion>
-
-          {/* Períodos */}
-          <Accordion 
-            expanded={expandedSection === 'dates'} 
-            onChange={handleSectionChange('dates')}
-            elevation={0}
-            disableGutters
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <CalendarTodayIcon fontSize="small" />
-                <Typography>Períodos</Typography>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={3}>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" gutterBottom>
-                    Período de Publicação
-                  </Typography>
-                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                    <Grid item xs={6}>
-                      <DatePicker
-                        label="Data Inicial"
-                        value={localFilters.publicationPeriod?.start ? dayjs(localFilters.publicationPeriod.start) : null}
-                        onChange={handleDateChange('start', 'publicationPeriod')}
-                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                        format="DD/MM/YYYY"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <DatePicker
-                        label="Data Final"
-                        value={localFilters.publicationPeriod?.end ? dayjs(localFilters.publicationPeriod.end) : null}
-                        onChange={handleDateChange('end', 'publicationPeriod')}
-                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                        format="DD/MM/YYYY"
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-
-                <Box>
-                  <Typography variant="caption" color="text.secondary" gutterBottom>
-                    Período de Criação
-                  </Typography>
-                  <Grid container spacing={2} sx={{ mt: 0.5 }}>
-                    <Grid item xs={6}>
-                      <DatePicker
-                        label="Data Inicial"
-                        value={localFilters.creationPeriod?.start ? dayjs(localFilters.creationPeriod.start) : null}
-                        onChange={handleDateChange('start', 'creationPeriod')}
-                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                        format="DD/MM/YYYY"
-                      />
-                    </Grid>
-                    <Grid item xs={6}>
-                      <DatePicker
-                        label="Data Final"
-                        value={localFilters.creationPeriod?.end ? dayjs(localFilters.creationPeriod.end) : null}
-                        onChange={handleDateChange('end', 'creationPeriod')}
-                        slotProps={{ textField: { size: 'small', fullWidth: true } }}
-                        format="DD/MM/YYYY"
-                      />
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
+            </FilterSection>
+          ))}
         </Box>
 
-        {/* Footer com Botões */}
         <Box sx={{ 
           mt: 2,
           pt: 2,
@@ -392,7 +258,6 @@ export default function SearchFilters({
           </Button>
         </Box>
 
-        {/* Alerta de BBox */}
         {state.bbox && (
           <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
             A busca será limitada à área selecionada no mapa
