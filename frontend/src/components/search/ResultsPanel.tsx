@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearch } from '@/contexts/SearchContext';
 import {
     Box,
@@ -11,20 +11,17 @@ import {
     CircularProgress,
     Stack,
     Divider,
-    Pagination,
-    FormControl,
-    Select,
-    MenuItem,
-    SelectChangeEvent
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import ClearIcon from '@mui/icons-material/Clear';
 import { structuredSearch } from '@/services/api';
 import SearchFilters from './SearchFilters';
 import EmptyState from '@/components/common/EmptyState';
 import ResultCard from './ResultCard';
 import ActiveFilters from './ActiveFilters';
+import PaginationControls from './PaginationControls';
 import { getMetadata } from '@/services/api';
 import type { MetadataOptions } from '@/types/search';
 
@@ -33,17 +30,15 @@ interface ResultsPanelProps {
     onZoomTo?: (geometry: GeoJSON.Polygon) => void;
 }
 
-// Limites padrão caso a API não forneça
-const DEFAULT_LIMITS = [10, 20, 50];
-
 export default function ResultsPanel({
     onNewSearch,
     onZoomTo
 }: ResultsPanelProps) {
-    const { state, reset, setPagination, setResults, setError, setLoading } = useSearch();
+    const { state, reset, setPagination, setResults, setError, setLoading, setBoundingBox, clearMapSelection } = useSearch();
     const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
     const [activeTab, setActiveTab] = useState<'results' | 'filters'>('results');
+    const prevBboxRef = useRef(state.bbox);
 
     const { pagination, bbox, filters } = state;
 
@@ -66,32 +61,94 @@ export default function ResultsPanel({
         loadMetadata();
     }, [metadata]);
 
+    // Efeito para atualizar resultados quando mudar o bbox
+    useEffect(() => {
+        const isBboxDifferent = JSON.stringify(prevBboxRef.current) !== JSON.stringify(state.bbox);
+        
+        const executeSearch = async () => {
+          setLoading(true);
+          try {
+            const response = await structuredSearch(
+              state.filters,
+              { page: 1 }, // Volta para primeira página quando muda o bbox
+              state.bbox
+            );
+    
+            setResults(response.items);
+            setPagination({
+              ...response.metadata,
+              limit: pagination.limit
+            });
+          } catch (error) {
+            setError(error instanceof Error ? error.message : 'Erro ao atualizar resultados');
+          } finally {
+            setLoading(false);
+          }
+        };
+    
+        if (state.results.length > 0 && isBboxDifferent) {
+          executeSearch();
+          prevBboxRef.current = state.bbox;
+        }
+    }, [
+        state.bbox,
+        state.filters,
+        pagination.limit,
+        state.results.length,
+        setResults,
+        setPagination,
+        setLoading,
+        setError
+    ]);
+
     const handleTabChange = (_event: React.SyntheticEvent, newValue: 'results' | 'filters') => {
         setActiveTab(newValue);
     };
 
     const handleNewSearch = () => {
+        if (clearMapSelection) {
+            clearMapSelection();
+        }
+        setBoundingBox(undefined);
         reset();
         onNewSearch();
     };
 
-    // Handler para mudança de limite por página
-    const handleLimitChange = async (event: SelectChangeEvent<number>) => {
-        const newLimit = Number(event.target.value);
+    const handlePageChange = async (newPage: number) => {
         setLoading(true);
-
         try {
-            // Faz nova requisição com o novo limite
             const response = await structuredSearch(
-              {...filters, limit: newLimit},
-                { page: 1 }, // Volta para primeira página e usa o novo limite
+                {...filters, limit: pagination.limit},
+                { page: newPage },
                 bbox
             );
 
             setResults(response.items);
             setPagination({
                 ...response.metadata,
-                limit: newLimit // Garante que usamos o limite selecionado
+                limit: pagination.limit,
+                page: newPage
+            });
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Erro ao atualizar resultados');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLimitChange = async (newLimit: number) => {
+        setLoading(true);
+        try {
+            const response = await structuredSearch(
+                {...filters, limit: newLimit},
+                { page: 1 },
+                bbox
+            );
+
+            setResults(response.items);
+            setPagination({
+                ...response.metadata,
+                limit: newLimit
             });
         } catch (error) {
             setError(error instanceof Error ? error.message : 'Erro ao atualizar resultados');
@@ -102,34 +159,56 @@ export default function ResultsPanel({
 
     // Contador de filtros ativos
     const activeFiltersCount = Object.entries(state.filters).reduce((count, [key, value]) => {
-        // Ignorar campos que não são filtros
-        if (key === 'sortDirection' || key === 'limit') {
-            return count;
-        }
-
-        if (value === undefined || value === null || value === '') {
-            return count;
-        }
-
-        // Se tem sortField, conta como um único filtro (inclui direction)
-        if (key === 'sortField') {
-            return count + 1;
-        }
-
+        if (key === 'sortDirection' || key === 'limit') return count;
+        if (!value) return count;
+        if (key === 'sortField') return count + 1;
         return count + 1;
     }, 0);
 
-    // Calcular range de itens exibidos
-    const startItem = ((pagination.page - 1) * pagination.limit) + 1;
-    const endItem = Math.min(startItem + pagination.limit - 1, pagination.total);
+    const handleClearBbox = async () => {
+        if (clearMapSelection) {
+            clearMapSelection();
+        }
+        setBoundingBox(undefined);
+        setLoading(true);
+      
+        try {
+            const response = await structuredSearch(
+                filters,
+                { page: 1 },
+                undefined
+            );
+      
+            setResults(response.items);
+            setPagination({
+                ...response.metadata,
+                limit: pagination.limit
+            });
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'Erro ao atualizar resultados');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     return (
-        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Header */}
+        <Box sx={{ 
+            height: '100%', 
+            display: 'flex', 
+            flexDirection: 'column',
+            bgcolor: 'background.paper',
+            borderLeft: 1,
+            borderColor: 'divider',
+            boxShadow: 2
+        }}>
+            {/* Header - Fixo */}
             <Box sx={{
                 p: 2,
                 borderBottom: 1,
-                borderColor: 'divider'
+                borderColor: 'divider',
+                bgcolor: theme => theme.palette.mode === 'dark' 
+                    ? 'background.default'
+                    : 'grey.50'
             }}>
                 <Box sx={{
                     display: 'flex',
@@ -157,10 +236,8 @@ export default function ResultsPanel({
                     </Button>
                 </Box>
 
-                {/* Active Filters Summary */}
                 <ActiveFilters />
 
-                {/* Tabs */}
                 <Tabs
                     value={activeTab}
                     onChange={handleTabChange}
@@ -189,9 +266,10 @@ export default function ResultsPanel({
                 </Tabs>
             </Box>
 
-            {/* Content */}
+            {/* Content - Scrollável */}
             <Box sx={{
                 flex: 1,
+                minHeight: 0, // Importante para permitir scroll
                 overflowY: 'auto',
                 px: 2,
                 py: 1
@@ -230,104 +308,57 @@ export default function ResultsPanel({
                 )}
             </Box>
 
-            {/* Footer */}
-            <Box sx={{ px: 2, py: 1 }}>
-                {/* Paginação */}
-                {activeTab === 'results' && pagination.totalPages > 1 && (
-                    <>
-                        <Divider sx={{ mb: 2 }} />
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <Box sx={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
-                            }}>
-                                <FormControl size="small" sx={{ minWidth: 120 }}>
-                                    <Select
-                                        value={pagination.limit}
-                                        onChange={handleLimitChange}
+            {/* Footer - Fixo */}
+            {activeTab === 'results' && (
+                <Box sx={{ 
+                    borderTop: 1, 
+                    borderColor: 'divider',
+                    bgcolor: theme => theme.palette.mode === 'dark' 
+                        ? 'background.default'
+                        : 'grey.50'
+                }}>
+                    {/* Paginação */}
+                    <Box sx={{ px: 2 }}>
+                        <PaginationControls
+                            pagination={pagination}
+                            disabled={state.loading}
+                            onPageChange={handlePageChange}
+                            onLimitChange={handleLimitChange}
+                        />
+                    </Box>
+
+                    {/* BBox Alert */}
+                    {bbox && (
+                        <>
+                            <Divider />
+                            <Box sx={{ p: 2 }}>
+                                <Box sx={{
+                                    bgcolor: 'primary.main',
+                                    color: 'primary.contrastText',
+                                    fontSize: '0.875rem',
+                                    py: 1,
+                                    px: 2,
+                                    borderRadius: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between'
+                                }}>
+                                    <span>Resultados filtrados pela área selecionada no mapa</span>
+                                    <Button
                                         size="small"
+                                        color="inherit"
+                                        onClick={handleClearBbox}
+                                        startIcon={<ClearIcon />}
+                                        sx={{ ml: 2 }}
                                     >
-                                        {(() => {
-                                            // Garantir que temos um array de limites não vazio
-                                            const availableLimits = pagination.availableLimits?.length
-                                                ? pagination.availableLimits
-                                                : DEFAULT_LIMITS;
-
-                                            // Criar um Set com os limites disponíveis + limite atual
-                                            const limitSet = new Set([...availableLimits, pagination.limit]);
-
-                                            // Converter para array e ordenar
-                                            return Array.from(limitSet)
-                                                .sort((a, b) => a - b)
-                                                .map(limit => (
-                                                    <MenuItem key={limit} value={limit}>
-                                                        {limit} por página
-                                                    </MenuItem>
-                                                ));
-                                        })()}
-                                    </Select>
-                                </FormControl>
-                                <Typography variant="body2" color="text.secondary">
-                                    {startItem}-{endItem} de {pagination.total}
-                                </Typography>
+                                        Limpar
+                                    </Button>
+                                </Box>
                             </Box>
-
-                            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                                <Pagination
-                                    count={pagination.totalPages}
-                                    page={pagination.page}
-                                    onChange={async (_event, newPage) => {
-                                        setLoading(true); // Indicar que está carregando
-
-                                        try {
-                                            const response = await structuredSearch(
-                                                {...filters, limit: pagination.limit},
-                                                { page: newPage},
-                                                bbox
-                                            );
-
-                                            setResults(response.items);
-                                            setPagination({
-                                                ...response.metadata,
-                                                limit: pagination.limit, // Manter o limite atual
-                                                page: newPage // Atualizar a página no estado
-                                            });
-                                        } catch (error) {
-                                            setError(error instanceof Error ? error.message : 'Erro ao atualizar resultados');
-                                        } finally {
-                                            setLoading(false); // Parar de indicar carregamento
-                                        }
-                                    }}
-                                    color="primary"
-                                    size="medium"
-                                    showFirstButton
-                                    showLastButton
-                                    siblingCount={1}
-                                />
-                            </Box>
-                        </Box>
-                    </>
-                )}
-
-                {/* BBox Alert */}
-                {bbox && (
-                    <>
-                        <Divider sx={{ my: 2 }} />
-                        <Box sx={{
-                            bgcolor: 'primary.main',
-                            color: 'primary.contrastText',
-                            fontSize: '0.875rem',
-                            textAlign: 'center',
-                            py: 1,
-                            px: 2,
-                            borderRadius: 1
-                        }}>
-                            Resultados filtrados pela área selecionada no mapa
-                        </Box>
-                    </>
-                )}
-            </Box>
+                        </>
+                    )}
+                </Box>
+            )}
         </Box>
     );
 }

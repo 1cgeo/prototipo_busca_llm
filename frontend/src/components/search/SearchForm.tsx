@@ -13,7 +13,6 @@ import {
   Tooltip,
   Alert,
   AlertTitle,
-  Button,
   Divider,
   Chip,
   Stack
@@ -21,7 +20,6 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import ClearIcon from '@mui/icons-material/Clear';
-import PlaceIcon from '@mui/icons-material/Place';
 import CloseIcon from '@mui/icons-material/Close';
 import TuneIcon from '@mui/icons-material/Tune';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -29,7 +27,7 @@ import MapIcon from '@mui/icons-material/Map';
 
 const SEARCH_EXAMPLES = [
   'Cartas topográficas do Rio de Janeiro em escala 1:25.000',
-  'Mapas da região metropolitana de São Paulo publicados em 2023',
+  'Mapas de São Paulo publicados em 2023',
   'Dados cartográficos do projeto Copa do Mundo 2014',
   'Cartas do estado da Bahia em escala 1:50.000 criadas após 2020',
 ] as const;
@@ -65,8 +63,6 @@ export default function SearchForm({
     setLoading, 
     setError,
     setOriginalQuery,
-    setBoundingBox,
-    clearMapSelection
   } = useSearch();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string>();
@@ -346,32 +342,6 @@ export default function SearchForm({
             <Typography variant="body2" sx={{ fontWeight: 500 }}>
               {state.originalQuery}
             </Typography>
-          </Alert>
-        </Collapse>
-
-        {/* Alerta de BBox */}
-        <Collapse in={Boolean(state.bbox)}>
-          <Alert 
-            severity="info" 
-            variant="outlined"
-            icon={<PlaceIcon />}
-            action={
-              <Button
-                color="inherit"
-                size="small"
-                onClick={() => {
-                  if (clearMapSelection) {
-                    clearMapSelection();
-                  }
-                  setBoundingBox(undefined);
-                }}
-                startIcon={<ClearIcon />}
-              >
-                Limpar
-              </Button>
-            }
-          >
-            Busca será limitada à área selecionada no mapa
           </Alert>
         </Collapse>
 

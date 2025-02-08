@@ -45,13 +45,6 @@ export default function Map({
     fillColor: theme.palette.primary.main
   }), [theme.palette.primary.main]);
 
-  // Estilo para hover
-  const getHoverStyle = useCallback((): L.PathOptions => ({
-    weight: 2,
-    opacity: 1,
-    fillOpacity: 0.4
-  }), []);
-
   // Zoom para feature
   const zoomToFeature = useCallback((geometry: GeoJSON.Polygon) => {
     const map = mapRef.current;
@@ -178,12 +171,7 @@ export default function Map({
           layer.on({
             mouseover: (e) => {
               const l = e.target;
-              l.setStyle(getHoverStyle());
               l.bringToFront();
-            },
-            mouseout: (e) => {
-              const l = e.target;
-              l.setStyle(getFeatureStyle());
             },
             click: (e) => {
               const l = e.target;
@@ -232,7 +220,6 @@ export default function Map({
     results, 
     isDarkMode, 
     getFeatureStyle, 
-    getHoverStyle, 
     createPopupContent
   ]);
 

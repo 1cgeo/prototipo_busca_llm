@@ -5,13 +5,14 @@ import {
   ToggleButton, 
   CircularProgress,
   Alert,
-  Collapse,
   IconButton,
-  Paper
+  Paper,
+  Button
 } from '@mui/material';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import CloseIcon from '@mui/icons-material/Close';
+import ClearIcon from '@mui/icons-material/Clear';
 import SearchForm from './SearchForm';
 import SearchFilters from './SearchFilters';
 import { useSearch } from '@/contexts/SearchContext';
@@ -35,9 +36,15 @@ export default function SearchPanel({
   const [metadata, setMetadata] = useState<MetadataOptions | null>(null);
   const [loadingMetadata, setLoadingMetadata] = useState(false);
   const [metadataError, setMetadataError] = useState<string>();
-  const { state } = useSearch();
+  const { state, setBoundingBox, clearMapSelection } = useSearch();
   
-  // Carregar metadados quando necessário
+  const handleClearBbox = () => {
+    if (clearMapSelection) {
+      clearMapSelection();
+    }
+    setBoundingBox(undefined);
+  };
+
   useEffect(() => {
     const loadMetadata = async () => {
       if (mode === 'structured' && !metadata) {
@@ -64,8 +71,6 @@ export default function SearchPanel({
       setMode(newMode);
     }
   };
-
-  // Estilo do container baseado na variante
   const containerStyles = variant === 'central' ? {
     maxWidth: 600,
     mx: 'auto',
@@ -76,10 +81,8 @@ export default function SearchPanel({
   } : {
     bgcolor: 'background.paper'
   };
-
   return (
     <Paper sx={containerStyles}>
-      {/* Botão de fechar */}
       {onClose && (
         <IconButton
           onClick={onClose}
@@ -156,15 +159,25 @@ export default function SearchPanel({
           ) : null}
         </Box>
 
-        {/* Indicador de BBox */}
-        <Collapse in={Boolean(state.bbox)}>
+        {/* Alerta de BBox */}
+        {state.bbox && (
           <Alert 
             severity="info"
             sx={{ mt: 2 }}
+            action={
+              <Button
+                color="inherit"
+                size="small"
+                onClick={handleClearBbox}
+                startIcon={<ClearIcon />}
+              >
+                Limpar
+              </Button>
+            }
           >
             Área selecionada no mapa será considerada na busca
           </Alert>
-        </Collapse>
+        )}
       </Box>
     </Paper>
   );

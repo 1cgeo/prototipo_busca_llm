@@ -35,12 +35,14 @@ export function useMapEvents({
     if (!map) return null;
 
     return L.rectangle(bounds, {
-      color: theme.palette.primary.main,
+      color: '#dc3545',
       weight: 2,
       opacity: 0.8,
-      fillOpacity: 0.2
+      fillOpacity: 0.1,
+      dashArray: '5, 10',
+      fillColor: '#dc3545'
     });
-  }, [mapRef, theme.palette.primary.main]);
+  }, [mapRef]);
 
   // Atualizar retângulo quando o tema mudar
   useEffect(() => {
@@ -165,8 +167,8 @@ export function useMapEvents({
       previewRectRef.current = createRectangle(bounds);
       if (previewRectRef.current) {
         previewRectRef.current.setStyle({
-          opacity: 0.5,
-          fillOpacity: 0.1,
+          opacity: 0.6,
+          fillOpacity: 0.05,
           dashArray: '5, 10'
         });
         previewRectRef.current.addTo(map);

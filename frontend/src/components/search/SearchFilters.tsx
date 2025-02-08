@@ -5,7 +5,6 @@ import { MetadataOptions, SearchParams } from '@/types/search';
 import {
   Box,
   Button,
-  Alert,
   CircularProgress,
   Stack,
   SelectChangeEvent,
@@ -257,12 +256,6 @@ export default function SearchFilters({
             Buscar
           </Button>
         </Box>
-
-        {state.bbox && (
-          <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
-            A busca será limitada à área selecionada no mapa
-          </Alert>
-        )}
       </Box>
     </LocalizationProvider>
   );
