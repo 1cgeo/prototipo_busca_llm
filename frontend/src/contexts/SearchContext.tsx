@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, ReactNode, useState } from 'react';
+import { createContext, useContext, useReducer, ReactNode, useRef, useCallback } from 'react';
 import { 
   SearchState,
   SearchParams,
@@ -16,8 +16,8 @@ interface SearchContextType {
   setError: (error?: string) => void;
   setOriginalQuery: (query: string) => void;
   setBoundingBox: (bbox?: BoundingBox) => void;
-  clearMapSelection: (() => void) | null;
-  setMapClearFunction: (fn: () => void) => void;
+  clearMapSelection: () => void;
+  setMapClearFunction: (fn: (() => void) | null) => void;
   reset: () => void;
 }
 
@@ -43,57 +43,80 @@ type SearchAction =
   | { type: 'SET_BBOX'; payload?: BoundingBox }
   | { type: 'RESET' };
 
-  function searchReducer(state: SearchState, action: SearchAction): SearchState {
-    switch (action.type) {
-      case 'SET_RESULTS':
-        return { ...state, results: action.payload };
-      case 'SET_FILTERS':
-        return { ...state, filters: action.payload };
-      case 'SET_PAGINATION':
-        return { ...state, pagination: action.payload };
-      case 'SET_LOADING':
-        return { ...state, loading: action.payload };
-      case 'SET_ERROR':
-        return { ...state, error: action.payload };
-      case 'SET_ORIGINAL_QUERY':
-        return { ...state, originalQuery: action.payload };
-      case 'SET_BBOX':
-        return { ...state, bbox: action.payload };
-      case 'RESET':
-        return initialState;
-      default:
-        return state;
-    }
+function searchReducer(state: SearchState, action: SearchAction): SearchState {
+  switch (action.type) {
+    case 'SET_RESULTS':
+      return { ...state, results: action.payload };
+    case 'SET_FILTERS':
+      return { ...state, filters: action.payload };
+    case 'SET_PAGINATION':
+      return { ...state, pagination: action.payload };
+    case 'SET_LOADING':
+      return { ...state, loading: action.payload };
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
+    case 'SET_ORIGINAL_QUERY':
+      return { ...state, originalQuery: action.payload };
+    case 'SET_BBOX':
+      return { ...state, bbox: action.payload };
+    case 'RESET':
+      return initialState;
+    default:
+      return state;
   }
+}
 
 const SearchContext = createContext<SearchContextType | undefined>(undefined);
 
 export function SearchProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(searchReducer, initialState);
-  const [clearMapSelection, setClearMapSelection] = useState<(() => void) | null>(null);
+  const clearMapSelectionRef = useRef<(() => void) | null>(null);
+
+  // Memoize dispatch functions
+  const setResults = useCallback((results: SearchResult[]) => 
+    dispatch({ type: 'SET_RESULTS', payload: results }), []);
+
+  const setFilters = useCallback((filters: SearchParams) => 
+    dispatch({ type: 'SET_FILTERS', payload: filters }), []);
+
+  const setPagination = useCallback((pagination: PaginationInfo) => 
+    dispatch({ type: 'SET_PAGINATION', payload: pagination }), []);
+
+  const setLoading = useCallback((loading: boolean) => 
+    dispatch({ type: 'SET_LOADING', payload: loading }), []);
+
+  const setError = useCallback((error?: string) => 
+    dispatch({ type: 'SET_ERROR', payload: error }), []);
+
+  const setOriginalQuery = useCallback((query: string) =>
+    dispatch({ type: 'SET_ORIGINAL_QUERY', payload: query }), []);
+
+  const setBoundingBox = useCallback((bbox?: BoundingBox) => {
+    dispatch({ type: 'SET_BBOX', payload: bbox });
+  }, []);
+
+  const clearMapSelection = useCallback(() => {
+    clearMapSelectionRef.current?.();
+  }, []);
+
+  const setMapClearFunction = useCallback((fn: (() => void) | null) => {
+    clearMapSelectionRef.current = fn;
+  }, []);
+
+  const reset = useCallback(() => dispatch({ type: 'RESET' }), []);
 
   const value = {
     state,
-    setResults: (results: SearchResult[]) => 
-      dispatch({ type: 'SET_RESULTS', payload: results }),
-    setFilters: (filters: SearchParams) => 
-      dispatch({ type: 'SET_FILTERS', payload: filters }),
-    setPagination: (pagination: PaginationInfo) => 
-      dispatch({ type: 'SET_PAGINATION', payload: pagination }),
-    setLoading: (loading: boolean) => 
-      dispatch({ type: 'SET_LOADING', payload: loading }),
-    setError: (error?: string) => 
-      dispatch({ type: 'SET_ERROR', payload: error }),
-    setOriginalQuery: (query: string) =>
-      dispatch({ type: 'SET_ORIGINAL_QUERY', payload: query }),
-    setBoundingBox: (bbox?: BoundingBox) => {
-      dispatch({ type: 'SET_BBOX', payload: bbox });
-    },
+    setResults,
+    setFilters,
+    setPagination,
+    setLoading,
+    setError,
+    setOriginalQuery,
+    setBoundingBox,
     clearMapSelection,
-    setMapClearFunction: (fn: () => void) => {
-      setClearMapSelection(() => fn);
-    },
-    reset: () => dispatch({ type: 'RESET' })
+    setMapClearFunction,
+    reset
   };
 
   return (
