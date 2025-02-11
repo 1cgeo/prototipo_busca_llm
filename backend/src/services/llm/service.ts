@@ -36,25 +36,25 @@ const ExtractedSearchParams = z
     scale: z
       .union([z.enum(SCALES), z.undefined(), z.null()])
       .describe(
-        'Use 1:25.000 when text mentions "maior que X" (where X is any scale), or "grande", "detalhada". Use 1:100.000 for "média". Use 1:250.000 for "pequena". When comparing scales, more detailed (smaller denominator) always takes precedence',
+        'Match scales exactly (1:1.000 to 1:250.000). For relative terms: "maior/detalhada" use 1:1.000, "média" use 1:50.000, "menor/pequena" use 1:250.000. When comparing scales, more detailed (smaller denominator) always takes precedence',
       ),
 
     productType: z
       .union([z.enum(PRODUCT_TYPES), z.undefined(), z.null()])
       .describe(
-        'Match "topo" or default "carta" to Carta Topográfica, "ortoimg/orto/imagem" to Carta Ortoimagem, "temática" to Carta Temática',
+        'Extract product type with priority: 1) Exact matches of technical terms (MDS, MDT, CIRC). 2) Specific product variations (banda P HH, banda X). 3) General categories. MDS/MDT without RAM suffix implies modelo tridimensional. Temático without type implies Cartas Temáticas Não SCN',
       ),
 
     state: z
       .union([z.string(), z.undefined(), z.null()])
       .describe(
-        'Extract state names even when part of prepositions: "do para" → "Pará", "de rondonia" → "Rondônia", "do rio grande do sul" → "Rio Grande do Sul". Always normalize with proper capitals and accents',
+        'Extract state names even when part of prepositions: "do para" → "Pará", "de rondonia" → "Rondônia". Always normalize with proper capitals and accents',
       ),
 
     city: z
       .union([z.string(), z.undefined(), z.null()])
       .describe(
-        'Extract city names even when part of prepositions: "em cuiaba" → "Cuiabá", "de manaus" → "Manaus". Always normalize with proper capitals and accents',
+        'Extract city names even when part of prepositions: "em cuiaba" → "Cuiabá". Always normalize with proper capitals and accents',
       ),
 
     supplyArea: z
@@ -66,7 +66,7 @@ const ExtractedSearchParams = z
     project: z
       .union([z.enum(PROJECTS), z.undefined(), z.null()])
       .describe(
-        'Match project names exactly: "rondonia" → "Rondônia", "copa" → "Copa do Mundo 2014", "olimpiadas" → "Olimpíadas"',
+        'Match project names exactly. Technical abbreviations (BECA → NGA-BECA) take precedence over partial matches',
       ),
 
     publicationPeriod: z
@@ -178,31 +178,31 @@ Query: "inom SF-22-Y-D-II-4-SE do primeiro cgeo criado na semana passada"
   }
 }
 
-Query: "preciso da orto MI 2965-2-NE do segundo cgeo em 50k"
+Query: "preciso do MDT-RAM MI 2965-2-NE do segundo cgeo em 5k"
 {
-  "reasoning": "1. Found complete MI code with directional suffix - use as keyword. 2. 'orto' matches to 'Carta Ortoimagem'. 3. 'segundo cgeo' normalizes to '2° Centro de Geoinformação'. 4. '50k' translates to '1:50.000'. 5. MI code presence makes this a specific chart request.",
+  "reasoning": "1. Found complete MI code with directional suffix - use as keyword. 2. 'MDT-RAM' matches to 'MDT - RAM'. 3. 'segundo cgeo' normalizes to '2° Centro de Geoinformação'. 4. '5k' translates to '1:5.000'. 5. MI code presence makes this a specific chart request.",
   "keyword": "2965-2-NE",
   "supplyArea": "2° Centro de Geoinformação",
-  "productType": "Carta Ortoimagem",
-  "scale": "1:50.000"
+  "productType": "MDT - RAM",
+  "scale": "1:5.000"
 }
 
-Query: "carta topográfica Passo da Seringueira em grande escala criada entre 2022 e 2023"
+Query: "Carta Altura da Vegetação Passo da Seringueira em grande escala criada entre 2022 e 2023"
 {
-  "reasoning": "1. No MI/INOM patterns - use location name as keyword. 2. Explicit product type mention. 3. 'grande escala' standardizes to '1:25.000'. 4. Date range with 'criada' indicates creation period. 5. Use full year range for exact years mentioned.",
+  "reasoning": "1. No MI/INOM patterns - use location name as keyword. 2. Explicit product type mention. 3. 'grande escala' standardizes to '1:1.000'. 4. Date range with 'criada' indicates creation period. 5. Use full year range for exact years mentioned.",
   "keyword": "Passo da Seringueira",
-  "scale": "1:25.000",
-  "productType": "Carta Topográfica",
+  "scale": "1:1.000",
+  "productType": "Altura da vegetação",
   "creationPeriod": {
     "start": "2022-01-01",
     "end": "2023-12-31"
   }
 }
 
-Query: "cartas detalhadas (25k ou 50k) de brasilia do ultimo trimestre"
+Query: "cartas detalhadas (2k ou 5k) de brasilia do ultimo trimestre"
 {
-  "reasoning": "1. Between multiple scales, choose most detailed (25k). 2. 'brasilia' normalizes to 'Brasília'. 3. 'ultimo trimestre' means previous complete quarter (2024-Q4). 4. Without creation/criação mention, assume publication date. 5. City name without MI/INOM is location filter, not keyword.",
-  "scale": "1:25.000",
+  "reasoning": "1. Between multiple scales, choose most detailed (2k). 2. 'brasilia' normalizes to 'Brasília'. 3. 'ultimo trimestre' means previous complete quarter (2024-Q4). 4. Without creation/criação mention, assume publication date. 5. City name without MI/INOM is location filter, not keyword.",
+  "scale": "1:2.000",
   "city": "Brasília",
   "publicationPeriod": {
     "start": "2024-10-01",
@@ -221,23 +221,23 @@ Query: "5 cartas mais antigas SF-22-Y-D ou MI 2965-2-NE do quarto cgeo em pequen
   "sortDirection": "ASC"
 }
 
-Query: "cartas topo publicadas em 2023 do quinto cgeo em mg e es em media escala"
+Query: "cartas Tematico CTBL publicadas em 2023 do quinto cgeo em mg e es em media escala"
 {
-  "reasoning": "1. 'cartas topo' means 'Carta Topográfica'. 2. Full year for 2023 publication. 3. 'quinto cgeo' normalizes to '5° Centro de Geoinformação'. 4. Multiple states - use first (MG → Minas Gerais). 5. 'media escala' means '1:100.000'.",
-  "productType": "Carta Topográfica",
+  "reasoning": "1. 'Tematico CTBL' is exact product type match. 2. Full year for 2023 publication. 3. 'quinto cgeo' normalizes to '5° Centro de Geoinformação'. 4. Multiple states - use first (MG → Minas Gerais). 5. 'media escala' means '1:50.000'.",
+  "productType": "Tematico CTBL",
   "publicationPeriod": {
     "start": "2023-01-01",
     "end": "2023-12-31"
   },
   "supplyArea": "5° Centro de Geoinformação",
   "state": "Minas Gerais",
-  "scale": "1:100.000"
+  "scale": "1:50.000"
 }
 
-Query: "mapeamento sistematico em goias publicado depois de 2020 ordem mais antiga"
+Query: "mapeamento areas interesse em goias publicado depois de 2020 ordem mais antiga"
 {
-  "reasoning": "1. 'mapeamento sistematico' exactly matches project name. 2. 'goias' normalizes to 'Goiás'. 3. 'depois de 2020' means from 2020-01-01 to current date. 4. 'ordem mais antiga' with 'publicado' means ascending publication sort.",
-  "project": "Mapeamento Sistemático",
+  "reasoning": "1. 'mapeamento areas interesse' matches 'Mapeamento de Áreas de Interesse da Força'. 2. 'goias' normalizes to 'Goiás'. 3. 'depois de 2020' means from 2020-01-01 to current date. 4. 'ordem mais antiga' with 'publicado' means ascending publication sort.",
+  "project": "Mapeamento de Áreas de Interesse da Força",
   "state": "Goiás",
   "publicationPeriod": {
     "start": "2020-01-01",
@@ -247,11 +247,11 @@ Query: "mapeamento sistematico em goias publicado depois de 2020 ordem mais anti
   "sortDirection": "ASC"
 }
 
-Query: "imagens de satelite de manaus do projeto copa do mundo"
+Query: "Ortoimagem banda P pol HH de manaus do projeto NGA-BECA"
 {
-  "reasoning": "1. 'imagens de satelite' indicates 'Carta Ortoimagem'. 2. Project reference matches 'Copa do Mundo 2014'. 3. City 'manaus' normalizes to 'Manaus'. 4. No MI/INOM or specific chart name - location is filter only.",
-  "productType": "Carta Ortoimagem",
-  "project": "Copa do Mundo 2014",
+  "reasoning": "1. 'Ortoimagem banda P pol HH' is exact product type match. 2. Project reference matches 'NGA-BECA'. 3. City 'manaus' normalizes to 'Manaus'. 4. No MI/INOM or specific chart name - location is filter only.",
+  "productType": "Ortoimagem banda P pol HH",
+  "project": "NGA-BECA",
   "city": "Manaus"
 }
 
@@ -264,12 +264,11 @@ Query: "MI 2901 de porto alegre com data de criação mais antiga"
   "sortDirection": "ASC"
 }
 
-Query: "carta temática do projeto olimpíadas SF-22-Y-D-II"
+Query: "carta censipam SF-22-Y-D-II"
 {
-  "reasoning": "1. Found complete INOM code - use as keyword. 2. Project name matches 'Olimpíadas'. 3. Product type explicitly mentioned as 'Carta Temática'. 4. INOM takes precedence over other potential keywords.",
+  "reasoning": "1. Found complete INOM code - use as keyword. 2. Product type explicitly mentioned as 'Cartas CENSIPAM'. 3. INOM takes precedence over other potential keywords.",
   "keyword": "SF-22-Y-D-II",
-  "productType": "Carta Temática",
-  "project": "Olimpíadas"
+  "productType": "Cartas CENSIPAM"
 }`;
   }
 }

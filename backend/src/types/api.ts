@@ -1,6 +1,10 @@
 import type { Polygon } from 'geojson';
 
 export const SCALES = [
+  '1:1.000',
+  '1:2.000',
+  '1:5.000',
+  '1:10.000',
   '1:25.000',
   '1:50.000',
   '1:100.000',
@@ -8,9 +12,36 @@ export const SCALES = [
 ] as const;
 
 export const PRODUCT_TYPES = [
-  'Carta Topográfica',
-  'Carta Ortoimagem',
-  'Carta Temática',
+  'Altura da vegetação',
+  'CDGV EDGV Defesa F Ter Não SCN',
+  'CTM Venezuela',
+  'Carta Ortoimagem Especial',
+  'Cartas CENSIPAM',
+  'Cartas Temáticas Não SCN',
+  'MDS - RAM',
+  'MDT - RAM',
+  'Modelo Tridimensional MDS',
+  'Modelo Tridimensional MDT',
+  'Nao SCN Carta Topografica Especial Matricial',
+  'Ortoimagem',
+  'Ortoimagem Radar Colorida',
+  'Ortoimagem SCN',
+  'Ortoimagem banda P',
+  'Ortoimagem banda P pol HH',
+  'Ortoimagem banda P pol HV',
+  'Ortoimagem banda X pol HH',
+  'SCN Carta Especial Matricial',
+  'SCN Carta Ortoimagem',
+  'SCN Carta Topografica Matricial',
+  'SCN Carta Topografica Vetorial',
+  'SCN Carta Topografica Vetorial EDGV 3.0',
+  'Tematico CIRC',
+  'Tematico CIRP',
+  'Tematico CISC',
+  'Tematico CISP',
+  'Tematico CMIL',
+  'Tematico CTBL',
+  'Tematico CTP',
 ] as const;
 
 export const SUPPLY_AREAS = [
@@ -22,15 +53,21 @@ export const SUPPLY_AREAS = [
 ] as const;
 
 export const PROJECTS = [
-  'Rondônia',
-  'Amapá',
-  'Bahia',
-  'BECA',
-  'Rio Grande do Sul',
-  'Mapeamento Sistemático',
+  'AMAN',
+  'Base Cartográfica Digital da Bahia',
+  'Base Cartográfica Digital de Rondônia',
+  'Base Cartográfica Digital do Amapá',
+  'COTer Não EDGV',
+  'Cobertura Aerofotogramétrica do Estado de São Paulo',
+  'Conversão do Mapeamento Sistematico do SCN para Vetorial',
+  'Copa das Confederações',
   'Copa do Mundo 2014',
-  'Olimpíadas',
-  'Copa das Confederações 2013',
+  'Mapeamento Sistemático',
+  'Mapeamento de Áreas de Interesse da Força',
+  'NGA-BECA',
+  'Olimpíadas Rio 2016',
+  'Produtos Temáticos Diversos',
+  'Radiografia da Amazônia',
 ] as const;
 
 export const SORT_FIELDS = ['publicationDate', 'creationDate'] as const;

@@ -26,7 +26,7 @@ export const testCases: TestCase[] = [
         query: 'MI 2901 do projeto olimpiadas',
         expected: {
             keyword: '2901',
-            project: 'Olimpíadas'
+            project: 'Olimpíadas Rio 2016'
         },
         difficulty: 'easy',
         description: 'Simple MI code with project',
@@ -62,7 +62,7 @@ export const testCases: TestCase[] = [
         query: 'carta SF-22-Y-D do tipo ortoimg',
         expected: {
             keyword: 'SF-22-Y-D',
-            productType: 'Carta Ortoimagem'
+            productType: 'SCN Carta Ortoimagem'
         },
         difficulty: 'easy',
         description: 'INOM code with product type',
@@ -85,7 +85,7 @@ export const testCases: TestCase[] = [
         expected: {
             keyword: 'Passo da Seringueira',
             scale: '1:25.000',
-            productType: 'Carta Topográfica'
+            productType: 'SCN Carta Topografica Matricial'
         },
         difficulty: 'medium',
         description: 'Map name with scale and type',
@@ -108,7 +108,7 @@ export const testCases: TestCase[] = [
         query: 'carta Vale do Guaporé do projeto rondonia',
         expected: {
             keyword: 'Vale do Guaporé',
-            project: 'Rondônia'
+            project: 'Base Cartográfica Digital de Rondônia'
         },
         difficulty: 'medium',
         description: 'Map name with specific project',
@@ -131,7 +131,7 @@ export const testCases: TestCase[] = [
         query: 'cartas do tipo topo com MI 530 ou SF-22 publicadas esse ano',
         expected: {
             keyword: '530',
-            productType: 'Carta Topográfica',
+            productType: 'SCN Carta Topografica Matricial',
             publicationPeriod: {
                 start: '2025-01-01',
                 end: '2025-12-31'
@@ -201,7 +201,7 @@ export const testCases: TestCase[] = [
     {
         query: 'produtos da copa das confederacoes em fortaleza',
         expected: {
-            project: 'Copa das Confederações 2013',
+            project: 'Copa das Confederações',
             city: 'Fortaleza'
         },
         difficulty: 'medium',
@@ -235,7 +235,7 @@ export const testCases: TestCase[] = [
         query: 'preciso das 5 cartas mais antigas do tipo ortoimg em escala detalhada do terceiro cgeo em pernambuco publicadas depois de 2020',
         expected: {
             limit: 5,
-            productType: 'Carta Ortoimagem',
+            productType: 'SCN Carta Ortoimagem',
             scale: '1:25.000',
             supplyArea: '3° Centro de Geoinformação',
             state: 'Pernambuco',

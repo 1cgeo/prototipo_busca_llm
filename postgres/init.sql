@@ -1,6 +1,7 @@
 -- Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Tabela de estados
 CREATE TABLE estados (
@@ -44,19 +45,13 @@ CREATE TABLE areas_suprimento (
 
 -- Tabela principal de datasets
 CREATE TABLE datasets (
-    id SERIAL PRIMARY KEY,
+	id uuid NOT NULL DEFAULT uuid_generate_v4(),
     nome VARCHAR(200) NOT NULL,
     mi VARCHAR(20),
     inom VARCHAR(50),
-    escala VARCHAR(10) NOT NULL CHECK (escala IN ('1:25.000', '1:50.000', '1:100.000', '1:250.000')),
-    tipo_produto VARCHAR(50) NOT NULL CHECK (tipo_produto IN ('Carta Topográfica', 'Carta Ortoimagem', 'Carta Temática')),
-    projeto VARCHAR(100) NOT NULL CHECK (
-        projeto IN (
-            'Rondônia', 'Amapá', 'Bahia', 'BECA', 'Rio Grande do Sul',
-            'Mapeamento Sistemático', 'Copa do Mundo 2014', 'Olimpíadas',
-            'Copa das Confederações 2013'
-        )
-    ),
+    escala VARCHAR(10) NOT NULL,
+    tipo_produto VARCHAR(50) NOT NULL,
+    projeto VARCHAR(100) NOT NULL,
     data_publicacao DATE NOT NULL,
     data_criacao DATE NOT NULL,
     geom GEOMETRY(POLYGON, 4326) NOT NULL,
@@ -67,7 +62,8 @@ CREATE TABLE datasets (
             COALESCE(inom, '') || ' ' || 
             projeto
         )
-    ) STORED
+    ) STORED,
+    CONSTRAINT datasets_pk PRIMARY KEY (id)
 );
 
 -- Índices

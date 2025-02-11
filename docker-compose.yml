@@ -2,7 +2,6 @@ services:
   backend:
     build: ./backend
     depends_on:
-      - postgres
       - ollama
     networks:
       - app-network
@@ -11,18 +10,6 @@ services:
     build: ./frontend
     depends_on:
       - backend
-    networks:
-      - app-network
-
-  postgres:
-    image: postgis/postgis
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-    env_file:
-      - postgres/.env
     networks:
       - app-network
 
@@ -60,5 +47,4 @@ networks:
     name: app-network
 
 volumes:
-  postgres_data:
   ollama_models:
