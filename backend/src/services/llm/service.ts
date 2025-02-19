@@ -199,11 +199,12 @@ Query: "Carta Altura da Vegetação Passo da Seringueira em grande escala criada
   }
 }
 
-Query: "cartas detalhadas (2k ou 5k) de brasilia do ultimo trimestre"
+Query: "SCN Carta Topografica Matricial detalhadas (2k ou 5k) de brasilia do ultimo trimestre"
 {
   "reasoning": "1. Between multiple scales, choose most detailed (2k). 2. 'brasilia' normalizes to 'Brasília'. 3. 'ultimo trimestre' means previous complete quarter (2024-Q4). 4. Without creation/criação mention, assume publication date. 5. City name without MI/INOM is location filter, not keyword.",
   "scale": "1:2.000",
   "city": "Brasília",
+  "productType": "SCN Carta Topografica Matricial",
   "publicationPeriod": {
     "start": "2024-10-01",
     "end": "2024-12-31"
