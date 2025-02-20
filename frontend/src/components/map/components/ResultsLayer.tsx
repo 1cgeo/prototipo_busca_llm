@@ -62,28 +62,42 @@ export default function ResultsLayer({
       <div style="
         padding: 16px;
         min-width: 200px;
-        max-width: 300px;
+        max-width: 320px;
       ">
         <h4 style="
           margin: 0 0 8px;
           font-size: 16px;
           font-weight: 500;
           color: ${isDarkMode ? '#fff' : '#000'};
-        ">${feature.properties?.name || ''}</h4>
-        <p style="
-          margin: 4px 0;
+        ">${feature.properties?.name || 'Sem nome'}</h4>
+        <div style="
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: 4px 8px;
           font-size: 14px;
           color: ${isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)'};
         ">
-          Escala: ${feature.properties?.scale || ''}
-        </p>
-        <p style="
-          margin: 4px 0;
-          font-size: 14px;
-          color: ${isDarkMode ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)'};
-        ">
-          Tipo: ${feature.properties?.productType || ''}
-        </p>
+          <span style="font-weight: 500;">MI:</span>
+          <span>${feature.properties?.mi || '-'}</span>
+          
+          <span style="font-weight: 500;">INOM:</span>
+          <span>${feature.properties?.inom || '-'}</span>
+          
+          <span style="font-weight: 500;">Escala:</span>
+          <span>${feature.properties?.scale || '-'}</span>
+          
+          <span style="font-weight: 500;">Tipo:</span>
+          <span>${feature.properties?.productType || '-'}</span>
+          
+          <span style="font-weight: 500;">Projeto:</span>
+          <span>${feature.properties?.project || '-'}</span>
+          
+          <span style="font-weight: 500;">Criação:</span>
+          <span>${feature.properties?.creationDate ? new Date(feature.properties.creationDate).toLocaleDateString() : '-'}</span>
+          
+          <span style="font-weight: 500;">Publicação:</span>
+          <span>${feature.properties?.publicationDate ? new Date(feature.properties.publicationDate).toLocaleDateString() : '-'}</span>
+        </div>
       </div>
     `;
     return container;
@@ -96,12 +110,18 @@ export default function ResultsLayer({
       properties: {
         id: result.name,
         name: result.name,
+        mi: result.mi,
+        inom: result.inom,
         scale: result.scale,
-        productType: result.productType
+        productType: result.productType,
+        project: result.project,
+        creationDate: result.creationDate,
+        publicationDate: result.publicationDate
       },
       geometry: result.geometry
     }))
   }), [results]);
+  
 
   // Gerar uma key única baseada nos resultados
   const layerKey = useMemo(() => {

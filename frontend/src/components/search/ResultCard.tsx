@@ -14,7 +14,7 @@ import {
 import PlaceIcon from '@mui/icons-material/Place';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import MapIcon from '@mui/icons-material/Map';
-import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import ZoomIn from '@mui/icons-material/ZoomIn';
 import type { SearchResult } from '@/types/search';
 
 interface ResultCardProps {
@@ -94,7 +94,7 @@ export default function ResultCard({ result, onZoomTo }: ResultCardProps) {
                   }
                 }}
               >
-                <CenterFocusStrongIcon fontSize="small" />
+                <ZoomIn fontSize="small" />
               </IconButton>
             </Tooltip>
           )}

@@ -85,6 +85,8 @@ export interface SearchResult {
   publicationDate: string;
   creationDate: string;
   geometry: GeoJSON.Polygon;
+  mi: string;
+  inom: string;
 }
 
 // API response metadata

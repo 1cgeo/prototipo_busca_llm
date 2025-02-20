@@ -4,8 +4,13 @@ import type { LatLngBounds, LatLng } from 'leaflet';
 export interface MapFeatureProperties {
   id: string;
   name: string;
+  mi: string;
+  inom: string;
   scale: string;
   productType: string;
+  project: string;
+  creationDate: string;
+  publicationDate: string;
 }
 
 export interface MapFeature extends Feature<Polygon, MapFeatureProperties> {}
