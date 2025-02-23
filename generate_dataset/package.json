@@ -1,0 +1,19 @@
+{
+    "name": "llm-training-generator",
+    "version": "1.0.0",
+    "description": "Training data generator for LLM fine-tuning",
+    "type": "module",
+    "main": "index.js",
+    "scripts": {
+      "start": "node index.js",
+      "generate": "node index.js"
+    },
+    "dependencies": {
+      "commander": "^13.1.0",
+      "luxon": "^3.5.0",
+      "ora": "^8.2.0"
+    },
+    "engines": {
+      "node": ">=16.0.0"
+    }
+  }
