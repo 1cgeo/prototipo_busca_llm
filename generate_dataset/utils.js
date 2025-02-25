@@ -1,8 +1,13 @@
-import { 
-  WEIGHTS, LOCATIONS, IDENTIFIERS, VARIATIONS} from './types.js';
+import {
+  WEIGHTS, LOCATIONS, KEYWORDS, VARIATIONS,
+  LOCAL_REFERENCES, FORMAL_ROLES, PROJECT_CONTEXTS
+} from './types.js';
 import { DateTime } from 'luxon';
 
 export function randomChoice(array) {
+  if (!array || array.length === 0) {
+    return null;
+  }
   return array[Math.floor(Math.random() * array.length)];
 }
 
@@ -28,26 +33,67 @@ const TYPO_TYPES = {
     const pos = randomInt(0, text.length - 1);
     return text.slice(0, pos) + text.slice(pos + 1);
   },
-  
+
   doubleLetter: (text) => {
     text = safeString(text);
     if (text.length < 1) return text;
     const pos = randomInt(0, text.length - 1);
     return text.slice(0, pos) + text[pos] + text[pos] + text.slice(pos + 1);
   },
-  
+
   swapLetters: (text) => {
     text = safeString(text);
     if (text.length < 2) return text;
     const pos = randomInt(0, text.length - 2);
     return text.slice(0, pos) + text[pos + 1] + text[pos] + text.slice(pos + 2);
   },
-  
+
   missingSpace: (text) => {
     text = safeString(text);
-    return text.replace(' ', '');
+    const words = text.split(' ');
+    if (words.length < 2) return text;
+    const pos = randomInt(0, words.length - 2);
+    return words.slice(0, pos).join(' ') + ' ' + words[pos] + words[pos + 1] + ' ' + words.slice(pos + 2).join(' ');
   },
-  
+
+  extraSpace: (text) => {
+    text = safeString(text);
+    if (text.length < 1) return text;
+    const pos = randomInt(1, text.length - 1);
+    return text.slice(0, pos) + ' ' + text.slice(pos);
+  },
+
+  wrongCase: (text) => {
+    text = safeString(text);
+    if (text.length < 1) return text;
+    const pos = randomInt(0, text.length - 1);
+    const char = text[pos];
+    const isLower = char === char.toLowerCase();
+    return text.slice(0, pos) + (isLower ? char.toUpperCase() : char.toLowerCase()) + text.slice(pos + 1);
+  },
+
+  adjacentKeyboard: (text) => {
+    text = safeString(text);
+    if (text.length < 1) return text;
+
+    const keyboard = {
+      'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'erfcxs', 'e': 'rdsw',
+      'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
+      'k': 'iolmj', 'l': 'opk', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
+      'p': 'ol', 'q': 'wa', 'r': 'etf', 's': 'awdzx', 't': 'ryfg',
+      'u': 'yhji', 'v': 'cfgb', 'w': 'qeas', 'x': 'zsdc', 'y': 'tghu',
+      'z': 'asx'
+    };
+
+    const pos = randomInt(0, text.length - 1);
+    const char = text[pos].toLowerCase();
+    if (keyboard[char]) {
+      const replacement = randomChoice(keyboard[char]);
+      return text.slice(0, pos) + replacement + text.slice(pos + 1);
+    }
+    return text;
+  },
+
   commonReplacements: (text) => {
     text = safeString(text);
     const replacements = {
@@ -65,29 +111,55 @@ const TYPO_TYPES = {
       'ú': 'u',
       'ü': 'u'
     };
-    return [...text].map(char => replacements[char] || char).join('');
-  },
-  
-  keyboardMistake: (text) => {
-    text = safeString(text);
-    if (text.length < 1) return text;
-    
-    const keyboard = {
-      'a': 'qwsz', 'b': 'vghn', 'c': 'xdfv', 'd': 'erfcxs', 'e': 'rdsw',
-      'f': 'rtgvcd', 'g': 'tyhbvf', 'h': 'yujnbg', 'i': 'ujko', 'j': 'uikmnh',
-      'k': 'iolmj', 'l': 'opk', 'm': 'njk', 'n': 'bhjm', 'o': 'iklp',
-      'p': 'ol', 'q': 'wa', 'r': 'etf', 's': 'awdzx', 't': 'ryfg',
-      'u': 'yhji', 'v': 'cfgb', 'w': 'qeas', 'x': 'zsdc', 'y': 'tghu',
-      'z': 'asx'
-    };
-    
-    const pos = randomInt(0, text.length - 1);
-    const char = text[pos].toLowerCase();
-    if (keyboard[char]) {
-      const replacement = randomChoice(keyboard[char]);
-      return text.slice(0, pos) + replacement + text.slice(pos + 1);
+
+    // Randomly replace one accented character
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (replacements[char]) {
+        return text.slice(0, i) + replacements[char] + text.slice(i + 1);
+      }
     }
     return text;
+  },
+
+  numberForLetter: (text) => {
+    text = safeString(text);
+    if (text.length < 1) return text;
+
+    const replacements = {
+      'a': '4', 'e': '3', 'i': '1', 'o': '0', 's': '5', 'b': '8', 't': '7', 'l': '1', 'z': '2'
+    };
+
+    // Find a letter to replace
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i].toLowerCase();
+      if (replacements[char] && Math.random() < 0.7) {
+        return text.slice(0, i) + replacements[char] + text.slice(i + 1);
+      }
+    }
+    return text;
+  },
+
+  repeatWord: (text) => {
+    text = safeString(text);
+    const words = text.split(' ');
+    if (words.length < 2) return text;
+    const index = randomInt(0, words.length - 1);
+    words.splice(index, 0, words[index]);
+    return words.join(' ');
+  },
+
+  missingPunctuation: (text) => {
+    text = safeString(text);
+    return text.replace(/[,.;:?!]/g, '');
+  },
+
+  addRandomPunctuation: (text) => {
+    text = safeString(text);
+    if (text.length < 2) return text;
+    const punctuation = [',', '.', ';', ':', '!', '?'];
+    const pos = randomInt(1, text.length - 1);
+    return text.slice(0, pos) + randomChoice(punctuation) + text.slice(pos);
   }
 };
 
@@ -96,19 +168,19 @@ export function generateTypos(text) {
   if (!text || typeof text !== 'string') return '';
 
   // Determine max possible typos based on text length
-  const maxTypos = Math.min(3, Math.floor(text.length / 3));
+  const maxTypos = Math.min(3, Math.floor(text.length / 15));
   let result = text;
   const typoFunctions = Object.values(TYPO_TYPES);
-  
+
   // Para cada typo possível, diminui exponencialmente a chance
   for (let i = 0; i < maxTypos; i++) {
     // Probabilidade diminui pela metade a cada typo adicional
-    const probability = WEIGHTS.typo / Math.pow(2, i);
-    
+    const probability = WEIGHTS.typo / Math.pow(1.5, i);
+
     if (shouldInclude(probability)) {
       const typoFunction = randomChoice(typoFunctions);
       const newResult = typoFunction(result);
-      
+
       // Só aplica se o typo realmente mudou o texto
       if (newResult && newResult !== result) {
         result = newResult;
@@ -149,6 +221,21 @@ export function generateDateRange(useRelative = true) {
       end: now.toISODate(),
       description: 'este ano'
     }),
+    lastYear: () => ({
+      start: now.minus({ years: 1 }).startOf('year').toISODate(),
+      end: now.minus({ years: 1 }).endOf('year').toISODate(),
+      description: 'ano passado'
+    }),
+    lastSemester: () => ({
+      start: now.minus({ months: 6 }).startOf('month').toISODate(),
+      end: now.minus({ months: 1 }).endOf('month').toISODate(),
+      description: 'último semestre'
+    }),
+    lastBimester: () => ({
+      start: now.minus({ months: 2 }).startOf('month').toISODate(),
+      end: now.minus({ months: 1 }).endOf('month').toISODate(),
+      description: 'último bimestre'
+    }),
     specific: () => {
       const randomYear = randomInt(2010, now.year);
       const randomMonth = randomInt(1, 12);
@@ -171,16 +258,20 @@ export function generateIdentifier(invalid = false) {
   if (invalid && shouldInclude(WEIGHTS.invalidData)) {
     const invalidPatterns = [
       () => `${randomInt(1000, 9999)}-${randomInt(1, 9)}-${randomChoice(['NO', 'NE', 'SO', 'SE'])}`,
-      () => `${randomChoice(['SA', 'SB', 'SC', 'SD'])}-${randomInt(10, 99)}-${randomChoice(['X', 'Y', 'Z'])}`
+      () => `${randomChoice(['SA', 'SB', 'SC', 'SD'])}-${randomInt(10, 99)}-${randomChoice(['X', 'Y', 'Z'])}`,
+      () => `MI-${randomInt(1000, 9999)}`,
+      () => `INOM-${randomChoice(['A', 'B', 'C', 'D'])}-${randomInt(10, 99)}`,
+      () => `${randomChoice(['MI', 'INOM'])}${randomInt(1000, 9999)}`,
+      () => `${randomChoice(['MI', 'INOM'])}.${randomInt(1000, 9999)}`
     ];
     return invalidPatterns[Math.floor(Math.random() * invalidPatterns.length)]();
   }
 
   // Get valid identifier
   const type = randomChoice(['MI', 'INOM']);
-  const identifiers = IDENTIFIERS[type.toLowerCase()];
-  const value = randomChoice(identifiers);
-  
+  const keywords = KEYWORDS[type.toLowerCase()];
+  const value = randomChoice(keywords);
+
   // 50% chance to include prefix
   const includePrefix = Math.random() < 0.5;
   return includePrefix ? `${type} ${value}` : value;
@@ -188,54 +279,60 @@ export function generateIdentifier(invalid = false) {
 
 export function generateLocation(invalid = false) {
   if (!shouldInclude(WEIGHTS.locationGroup)) return {};
-  
+
   let state = null;
   let city = null;
   let stateAbbr = null;
 
   // Generate state
   if (shouldInclude(WEIGHTS.state)) {
-    let stateobj = randomChoice(LOCATIONS.states);
-    state = stateobj.name
+    let stateObj = randomChoice(LOCATIONS.states);
+    state = stateObj.name;
+    stateAbbr = stateObj.abbr;
   }
 
   // Generate city with proper validation
   if (shouldInclude(WEIGHTS.city)) {
     if (state && !invalid) {
       // Get cities from that state
-      const stateCities = Object.entries(LOCATIONS.cities)
-        .filter(([_, stateMatch]) => stateMatch === stateAbbr)
-        .map(([city]) => city);
-      
-      if (stateCities.length > 0) {
+      const stateCities = LOCATIONS.cities[stateAbbr];
+
+      if (stateCities && stateCities.length > 0) {
         city = randomChoice(stateCities);
       }
     } else if (invalid && shouldInclude(WEIGHTS.invalidData)) {
-      const invalidCities = ['Cidade Inexistente', 'Nova Lugar', 'São Nowhere'];
+      const invalidCities = [
+        'Cidade Inexistente', 'Nova Lugar', 'São Nowhere', 'Porto Imaginário',
+        'Santa Ilusão', 'Montanha Verde', 'Vila Fictícia', 'Lagoa Seca',
+        'Rio Perdido', 'Campo dos Sonhos', 'Costa Irreal'
+      ];
       city = randomChoice(invalidCities);
     } else {
-      // Random valid city
-      city = randomChoice(Object.keys(LOCATIONS.cities));
+      // Random valid city from a random state
+      const randomStateAbbr = randomChoice(LOCATIONS.states).abbr;
+      const stateCities = LOCATIONS.cities[randomStateAbbr];
+      if (stateCities && stateCities.length > 0) {
+        city = randomChoice(stateCities);
+      }
     }
   }
 
   return { state, city };
 }
 
-
 export function generateLimit() {
   if (!shouldInclude(WEIGHTS.limit)) return null;
-  
+
   if (shouldInclude(WEIGHTS.invalidData)) {
     return randomInt(-10, 1000); // Invalid limits
   }
-  
+
   return randomInt(1, 100); // Valid limits
 }
 
 export function generateSortParams() {
   if (!shouldInclude(0.3)) return {};
-  
+
   return {
     sortField: randomChoice(['publicationDate', 'creationDate']),
     sortDirection: randomChoice(['ASC', 'DESC'])
@@ -273,55 +370,10 @@ export function isVariation(type, value) {
     return false;
   }
 
-  return Object.entries(VARIATIONS[type]).some(([canonical, variations]) => 
+  return Object.entries(VARIATIONS[type]).some(([canonical, variations]) =>
     variations.includes(value) && canonical !== value
   );
 }
-
-// Gera texto de normalização para o reasoning
-export function getReasoningText(type, usedValue, canonicalValue, context = {}) {
-  if (!usedValue || !canonicalValue) return null;
-  
-  if (!isVariation(type, usedValue) && usedValue === canonicalValue) {
-    return null;
-  }
-
-  const templates = {
-    SCALE: {
-      inference: `Scale "${usedValue}" indicates ${canonicalValue}`,
-      variation: `Scale "${usedValue}" standardizes to ${canonicalValue}`,
-      context: `"${usedValue}" represents ${canonicalValue} scale`
-    },
-    PRODUCT_TYPE: {
-      inference: `Product type "${canonicalValue}" inferred from "${usedValue}"`,
-      variation: `"${usedValue}" refers to product type ${canonicalValue}`,
-      context: `"${usedValue}" matches product type ${canonicalValue}`
-    },
-    SUPPLY_AREA: {
-      inference: `Supply area "${canonicalValue}" derived from "${usedValue}"`,
-      variation: `"${usedValue}" translates to ${canonicalValue}`,
-      context: `"${usedValue}" indicates ${canonicalValue}`
-    },
-    STATE: {
-      inference: `State reference "${canonicalValue}" extracted from "${usedValue}"`,
-      variation: `"${usedValue}" normalized to state ${canonicalValue}`,
-      context: `State "${usedValue}" refers to ${canonicalValue}`
-    },
-    PROJECT: {
-      inference: `Project "${canonicalValue}" identified from "${usedValue}"`,
-      variation: `"${usedValue}" refers to project ${canonicalValue}`,
-      context: `Project reference "${usedValue}" matches ${canonicalValue}`
-    }
-  };
-
-  const template = templates[type]?.[context.type || 'inference'] || 
-    `"${usedValue}" corresponds to ${canonicalValue}`;
-
-  return template
-    .replace(/\${usedValue}/g, usedValue)
-    .replace(/\${canonicalValue}/g, canonicalValue);
-}
-
 
 export function getSimilarityScore(params1, params2) {
   const weights = {
@@ -372,31 +424,45 @@ function generateRelativeDateRange() {
   const now = DateTime.now();
   const patterns = [
     {
-      description: 'última semana',
+      description: 'na última semana',
       generate: () => ({
         start: now.minus({ weeks: 1 }).startOf('week'),
         end: now.minus({ weeks: 1 }).endOf('week')
       })
     },
     {
-      description: 'últimos 3 meses',
+      description: 'nos últimos 3 meses',
       generate: () => ({
         start: now.minus({ months: 3 }),
         end: now
       })
     },
     {
-      description: 'último trimestre',
+      description: 'no último trimestre',
       generate: () => ({
         start: now.minus({ quarters: 1 }).startOf('quarter'),
         end: now.minus({ quarters: 1 }).endOf('quarter')
       })
     },
     {
-      description: 'ano passado',
+      description: 'no ano passado',
       generate: () => ({
         start: now.minus({ years: 1 }).startOf('year'),
         end: now.minus({ years: 1 }).endOf('year')
+      })
+    },
+    {
+      description: 'no último semestre',
+      generate: () => ({
+        start: now.minus({ months: 6 }).startOf('month'),
+        end: now.minus({ months: 1 }).endOf('month')
+      })
+    },
+    {
+      description: 'no último bimestre',
+      generate: () => ({
+        start: now.minus({ months: 2 }).startOf('month'),
+        end: now.minus({ months: 1 }).endOf('month')
       })
     }
   ];
@@ -412,7 +478,7 @@ function generateRelativeDateRange() {
 }
 
 export const PARAM_GROUPS = {
-  identifier: ['keyword'],
+  keyword: ['keyword'],
   location: ['state', 'city'],
   metadata: ['scale', 'productType'],
   organization: ['supplyArea', 'project'],
@@ -420,20 +486,139 @@ export const PARAM_GROUPS = {
 };
 
 export function calculateGroupDecay(params) {
-  const usedGroups = new Set();
-  
-  // Count which groups are used
-  Object.entries(params).forEach(([key, value]) => {
-    if (value) {
-      for (const [group, fields] of Object.entries(PARAM_GROUPS)) {
-        if (fields.includes(key)) {
-          usedGroups.add(group);
-          break;
-        }
-      }
-    }
-  });
+  // CORREÇÃO: Não aplicar decay para permitir mais parâmetros
+  return 0.9; // Valor alto para aumentar a chance de incluir mais parâmetros
+}
 
-  // Apply decay based on number of groups used
-  return Math.pow(WEIGHTS.parameterDecay, usedGroups.size);
+// Novas funções para melhorar a variabilidade
+
+// Função para adicionar ruído semântico ao texto
+export function addSemanticNoise(text) {
+  if (!shouldInclude(WEIGHTS.semanticNoise)) return text;
+
+  const noisePatterns = [
+    (t) => `${t}, se possível`,
+    (t) => `${t}, por gentileza`,
+    (t) => `urgente: ${t}`,
+    (t) => `${t} para apresentação amanhã`,
+    (t) => `estou com dificuldade para encontrar ${t}`,
+    (t) => `preciso com urgência de ${t}`,
+    (t) => `${t} para finalizar o projeto`,
+    (t) => `${t} - essencial para o trabalho`,
+    (t) => `${t}, teria como me ajudar?`,
+    (t) => `pela terceira vez solicito ${t}`,
+    (t) => `${t}, estamos em campo aguardando`,
+    (t) => `conforme falamos na reunião, ${t}`,
+    (t) => `consegue me ajudar com ${t}?`,
+    (t) => `${t}, é para o comandante`,
+    (t) => `${t}, o cliente está esperando`,
+    (t) => `${t}, tenho apenas hoje para concluir`,
+    (t) => `se ainda estiver disponível, ${t}`,
+    (t) => `${t}, foi o que me orientaram a solicitar`,
+    (t) => `${t}, conforme procedimento padrão`,
+    (t) => `já tentei localizar ${t} em outros lugares`
+  ];
+
+  return randomChoice(noisePatterns)(text);
+}
+
+// Função para alternar entre diferentes níveis de formalidade
+export function applyFormalityShift(text, formal = true) {
+  if (!shouldInclude(WEIGHTS.formalityShift)) return text;
+
+  if (formal) {
+    // Tornar mais formal
+    const formalPatterns = [
+      (t) => `Solicito, por gentileza, ${t}`,
+      (t) => `Venho por meio desta requisitar ${t}`,
+      (t) => `Conforme normativa interna, requisito ${t}`,
+      (t) => `Em atendimento às diretrizes técnicas, solicito ${t}`,
+      (t) => `Prezados, gostaria de solicitar ${t}`,
+      (t) => `Em conformidade com os procedimentos estabelecidos, necessito de ${t}`,
+      (t) => `Solicito vossa atenção para ${t}`,
+      (t) => `Faz-se necessário o acesso a ${t}`,
+      (t) => `Tendo em vista a urgência do assunto, solicito ${t}`,
+      (t) => `Em caráter oficial, requeiro ${t}`
+    ];
+    return randomChoice(formalPatterns)(text);
+  } else {
+    // Tornar mais informal/coloquial
+    const informalPatterns = [
+      (t) => `Oi, preciso de ${t}`,
+      (t) => `Tô precisando de ${t}`,
+      (t) => `Me ajuda a encontrar ${t}`,
+      (t) => `Dá pra me mandar ${t}?`,
+      (t) => `Tô na correria e preciso de ${t}`,
+      (t) => `Tô procurando ${t}, tem como me ajudar?`,
+      (t) => `Opa, consegue me enviar ${t}?`,
+      (t) => `Ei, cadê ${t}?`,
+      (t) => `Valeu por ajudar com ${t}`,
+      (t) => `Bom dia! Tô atrás de ${t}`
+    ];
+    return randomChoice(informalPatterns)(text);
+  }
+}
+
+// Função para adicionar conectores entre parâmetros
+export function addParameterConnector(params) {
+  if (params.length < 2) return params;
+
+  const connectors = [
+    ' e também ', ' além disso, ', ' adicionalmente, ',
+    ' junto com ', ' complementando com ', ' acompanhado de ',
+    ' combinado com ', ' em conjunto com ', ' somado a ',
+    ' acrescentando ', ' incluindo também ', ' sem esquecer de ',
+    ' juntamente com ', ' associado a ', ' vinculado a ',
+    ' relacionado com ', ' em paralelo a ', ' em adição a '
+  ];
+
+  const result = [...params];
+  const insertPosition = randomInt(0, params.length - 2);
+  result[insertPosition] = result[insertPosition] + randomChoice(connectors);
+
+  return result;
+}
+
+// Função para adicionar contexto a uma query
+export function addQueryContext(text) {
+  if (!shouldInclude(WEIGHTS.contextualInfo)) return text;
+
+  const contextPatterns = [
+    (t) => `Para o projeto de ${randomChoice(PROJECT_CONTEXTS)}, precisamos de ${t}`,
+    (t) => `Como ${randomChoice(FORMAL_ROLES)}, solicito ${t}`,
+    (t) => `Em trabalho na ${randomChoice(LOCAL_REFERENCES)}, necessito de ${t}`,
+    (t) => `Para concluir o relatório sobre ${randomChoice(LOCAL_REFERENCES)}, falta ${t}`,
+    (t) => `Durante atividade de campo em ${randomChoice(LOCAL_REFERENCES)}, identificamos a necessidade de ${t}`,
+    (t) => `Para o mapeamento de ${randomChoice(LOCAL_REFERENCES)}, precisamos de ${t}`,
+    (t) => `Como parte do projeto de ${randomChoice(PROJECT_CONTEXTS)}, solicito acesso a ${t}`,
+    (t) => `Para avaliação de riscos em ${randomChoice(LOCAL_REFERENCES)}, estamos buscando ${t}`,
+    (t) => `Conforme solicitação do coordenador de ${randomChoice(PROJECT_CONTEXTS)}, necessito de ${t}`,
+    (t) => `Para atualização da base de dados de ${randomChoice(LOCAL_REFERENCES)}, preciso de ${t}`
+  ];
+
+  return randomChoice(contextPatterns)(text);
+}
+
+// Função para gerar um local de referência fictício mas plausível
+export function generateFictionalPlace() {
+  const prefixes = ['São', 'Santa', 'Nova', 'Porto', 'Ribeirão', 'Vila', 'Campo', 'Morro', 'Lago', 'Serra'];
+  const roots = ['Cruz', 'Alegre', 'Verde', 'Feliz', 'Grande', 'Alto', 'Lindo', 'Belo', 'Novo', 'Real'];
+  const suffixes = ['do Sul', 'do Norte', 'da Serra', 'do Vale', 'do Campo', 'do Rio', 'da Mata', 'das Flores', 'dos Pinheiros', 'das Águas'];
+
+  // Gera um nome com diferentes combinações
+  const pattern = Math.random();
+
+  if (pattern < 0.3) {
+    // Apenas prefixo + root
+    return `${randomChoice(prefixes)} ${randomChoice(roots)}`;
+  } else if (pattern < 0.6) {
+    // Prefixo + root + suffix
+    return `${randomChoice(prefixes)} ${randomChoice(roots)} ${randomChoice(suffixes)}`;
+  } else if (pattern < 0.8) {
+    // Apenas root + suffix
+    return `${randomChoice(roots)} ${randomChoice(suffixes)}`;
+  } else {
+    // Apenas prefixo + suffix
+    return `${randomChoice(prefixes)}${randomChoice(suffixes)}`;
+  }
 }

@@ -6,8 +6,11 @@ import {
   SORT_DIRECTIONS,
   WEIGHTS,
   PRODUCT_TYPE_WEIGHTS,
+  PRODUCT_TYPES,
   LOCATIONS,
-  IDENTIFIERS
+  KEYWORDS,
+  LOCAL_REFERENCES,
+  PROJECT_CONTEXTS
 } from './types.js';
 
 import {
@@ -15,32 +18,31 @@ import {
   shouldInclude,
   generateDateRange,
   generateLocation,
-  calculateGroupDecay,
-  getReasoningText,
   randomInt,
-  PARAM_GROUPS
+  generateFictionalPlace
 } from './utils.js';
-import { generateQuery } from './templates.js';
+import { generateQuery, expandQueryVariations } from './templates.js';
 import { DateTime } from 'luxon';
 
 class ExampleGenerator {
   constructor() {
     this.usedQueries = new Set();
     this.usedCombinations = new Set();
+    this.successfulQueries = []; // Para armazenar exemplos bem-sucedidos
   }
 
   generateInvalidParams(baseParams) {
     const params = { ...baseParams };
     const invalidElements = [];
 
-    if (this.shouldInclude(0.4)) {
+    if (shouldInclude(0.4)) {
       // Identificador inválido
-      if (this.shouldInclude(0.5)) {
+      if (shouldInclude(0.5)) {
         const invalidId = this.generateIdentifier(true);
         if (invalidId) {
-          params.identifier = invalidId;
+          params.keyword = invalidId;
           invalidElements.push({
-            type: 'identifier',
+            type: 'keyword',
             value: invalidId.value,
             reason: `invalid ${invalidId.type} format`
           });
@@ -48,14 +50,22 @@ class ExampleGenerator {
       }
 
       // Escala inválida
-      if (this.shouldInclude(0.5)) {
-        const invalidScale = this.randomChoice([
+      if (shouldInclude(0.5)) {
+        const invalidScale = randomChoice([
           '1:999999',
           '1:123',
           '1:1000000',
           'grande escala',
           '1:0',
-          'escala municipal'
+          'escala municipal',
+          '1:3000',
+          '1:15000',
+          '1:75000',
+          'escala regional',
+          'micro escala',
+          'escala urbana detalhada',
+          '1:300.000',
+          '1:500.000'
         ]);
         params.scale = invalidScale;
         invalidElements.push({
@@ -66,13 +76,18 @@ class ExampleGenerator {
       }
 
       // Centro de Geoinformação inválido
-      if (this.shouldInclude(0.5)) {
-        const invalidCGEO = this.randomChoice([
+      if (shouldInclude(0.5)) {
+        const invalidCGEO = randomChoice([
           '6° Centro de Geoinformação',
           '7° CGEO',
           'Centro Geo',
           'CGEO Principal',
-          '0° Centro de Geoinformação'
+          '0° Centro de Geoinformação',
+          '8CGEO',
+          'CGeo Brasil',
+          'CGEO Nacional',
+          'Diretoria de Geoinformação',
+          'Centro Cartográfico'
         ]);
         params.supplyArea = invalidCGEO;
         invalidElements.push({
@@ -83,8 +98,8 @@ class ExampleGenerator {
       }
 
       // Localização inválida
-      if (this.shouldInclude(0.5)) {
-        const invalidLocation = this.generateLocation(true);
+      if (shouldInclude(0.5)) {
+        const invalidLocation = generateLocation(true);
         if (invalidLocation.city) {
           params.location = invalidLocation;
           invalidElements.push({
@@ -96,16 +111,43 @@ class ExampleGenerator {
       }
 
       // Data inválida
-      if (this.shouldInclude(0.5)) {
-        const futureDate = DateTime.now().plus({ years: 2 }).toISODate();
+      if (shouldInclude(0.5)) {
+        const localRef = randomChoice(LOCAL_REFERENCES);
+        const futureDate = DateTime.now().plus({ years: randomInt(1, 5) }).toISODate();
+        const endDate = DateTime.fromISO(futureDate).plus({ months: randomInt(1, 6) }).toISODate();
         params.publicationPeriod = {
           start: futureDate,
-          end: futureDate
+          end: endDate
         };
         invalidElements.push({
           type: 'date',
-          value: futureDate,
+          value: `${futureDate} (em ${localRef})`,
           reason: 'future date specified'
+        });
+      }
+      
+      // Formato inválido de período
+      if (shouldInclude(0.3) && !params.publicationPeriod) {
+        const now = DateTime.now();
+        const projectContext = randomChoice(PROJECT_CONTEXTS);
+        const start = now.minus({ months: randomInt(1, 24) }).toISODate();
+        const end = now.minus({ months: randomInt(25, 48) }).toISODate(); // End date is before start date
+        params.publicationPeriod = { start, end };
+        invalidElements.push({
+          type: 'date',
+          value: `período ${start} a ${end} para ${projectContext}`,
+          reason: 'end date before start date'
+        });
+      }
+      
+      // Limite inválido
+      if (shouldInclude(0.4)) {
+        const invalidLimits = [-10, -5, 0, 500, 1000, 5000];
+        params.limit = randomChoice(invalidLimits);
+        invalidElements.push({
+          type: 'limit',
+          value: params.limit,
+          reason: 'invalid limit value'
         });
       }
     }
@@ -113,78 +155,45 @@ class ExampleGenerator {
     return { params, invalidElements };
   }
 
-  randomChoice(array) {
-    return array[Math.floor(Math.random() * array.length)];
-  }
-
-  weightedChoice(weights) {
-    const total = Object.values(weights).reduce((a, b) => a + b, 0);
-    let random = Math.random() * total;
-    
-    for (const [item, weight] of Object.entries(weights)) {
-      random -= weight;
-      if (random <= 0) return item;
-    }
-    
-    return Object.keys(weights)[0];
-  }
-
-  shouldInclude(probability) {
-    return Math.random() < probability;
-  }
-
-  generateDateRange() {
-    const now = DateTime.now();
-    const randomMonths = Math.floor(Math.random() * 24);
-    const start = now.minus({ months: randomMonths });
-    const end = start.plus({ months: Math.floor(Math.random() * 3) + 1 });
-
-    return {
-      start: start.toISODate(),
-      end: end.toISODate()
-    };
-  }
-
   generateIdentifier(invalid = false) {
     if (!invalid) {
-      const type = this.randomChoice(['MI', 'INOM']);
-      return {
-        type,
-        value: this.randomChoice(IDENTIFIERS[type.toLowerCase()])
-      };
+      const type = randomChoice(['MI', 'INOM']);
+      return randomChoice(KEYWORDS[type.toLowerCase()]);
     }
 
-    const type = this.randomChoice(['MI', 'INOM']);
+    const type = randomChoice(['MI', 'INOM']);
     const invalidPatterns = {
-      MI: ['99999-9-XX', '1234-Z-NE', 'MI2965', '2965.2.NE'],
-      INOM: ['XX-22-Y-D', 'SF-99-Z-Z', 'SF22YD', 'SF.22.Y.D']
+      MI: ['99999-9-XX', '1234-Z-NE', 'MI2965', '2965.2.NE', 'MI-0', 'MI-ABC', '2965/2-NE', 'MI@2901', 'MI_2901'],
+      INOM: ['XX-22-Y-D', 'SF-99-Z-Z', 'SF22YD', 'SF.22.Y.D', 'INOM-SF', 'SF/22/Y/D', 'SF_22_Y_D', 'SF99YD', 'SFXXYD']
     };
-    return {
-      type,
-      value: this.randomChoice(invalidPatterns[type])
-    };
+    return randomChoice(invalidPatterns[type]);
   }
 
   generateLocation(invalid = false) {
     if (!invalid) {
-      const state = this.randomChoice(LOCATIONS.states);
-      const city = this.shouldInclude(WEIGHTS.city) ? 
-        this.randomChoice(LOCATIONS.cities[state.abbr] || []) : 
+      const state = randomChoice(LOCATIONS.states);
+      const city = shouldInclude(WEIGHTS.city) ? 
+        randomChoice(LOCATIONS.cities[state.abbr] || []) : 
         null;
       return { state, city };
     }
 
     // Gerar localização inválida
-    const state = this.randomChoice(LOCATIONS.states);
-    const invalidCities = ['Cidade Inexistente', 'Nova Lugar', 'São Nowhere'];
+    const state = randomChoice(LOCATIONS.states);
+    const invalidCities = [
+      'Cidade Inexistente', 'Nova Lugar', 'São Nowhere', 'Porto Imaginário',
+      'Santa Ilusão', 'Montanha Verde', 'Vila Fictícia', 'Lagoa Seca',
+      'Rio Perdido', 'Campo dos Sonhos', 'Costa Irreal', 'Cidade Fantasia',
+      'Vilarejo Perdido', 'São Invenção', 'Nova Utopia', generateFictionalPlace()
+    ];
     return {
       state,
-      city: this.randomChoice(invalidCities)
+      city: randomChoice(invalidCities)
     };
   }
 
   generateParamsHash(params) {
-    const relevantKeys = ['identifier', 'productType', 'scale', 'location', 'supplyArea', 'project'];
+    const relevantKeys = ['keyword', 'productType', 'scale', 'location', 'supplyArea', 'project'];
     const sortedKeys = relevantKeys.filter(key => params[key]).sort();
     
     // Create detailed hash including parameter values
@@ -192,8 +201,8 @@ class ExampleGenerator {
       if (key === 'location') {
         return `location:${params[key].state?.name || ''}-${params[key].city || ''}`;
       }
-      if (key === 'identifier') {
-        return `identifier:${params[key].type}-${params[key].value}`;
+      if (key === 'keyword') {
+        return `keyword:${params[key]}`;
       }
       return `${key}:${params[key]}`;
     });
@@ -201,53 +210,21 @@ class ExampleGenerator {
     return hashParts.join('|');
   }
 
-  hashToParams(hash) {
-    if (!hash) return {};
-    
-    const params = {};
-    const parts = hash.split('|');
-    
-    parts.forEach(part => {
-      const [key, value] = part.split(':');
-      
-      if (key === 'location') {
-        const [state, city] = value.split('-');
-        params.location = {
-          state: state ? { name: state } : null,
-          city: city || null
-        };
-      } else if (key === 'identifier') {
-        const [type, idValue] = value.split('-');
-        params.identifier = {
-          type,
-          value: idValue
-        };
-      } else {
-        params[key] = value;
-      }
-    });
-    
-    return params;
-  }
-  
-  checkSimilarity(params, recentParams) {
-    for (const recent of recentParams) {
-      const score = getSimilarityScore(params, recent);
-      if (score > 0.85) {
-        return true;
-      }
-    }
-    return false;
-  }
-
+  // Verificação simplificada de combinações válidas para permitir mais exemplos
   isValidCombination(params) {
     // Reject if any parameter is undefined
     if (Object.values(params).some(v => v === undefined)) {
       return false;
     }
-  
-    const hash = this.generateParamsHash(params);
     
+    // Limite o número de verificações de combinações
+    if (this.usedCombinations.size > 10000) {
+      // Após 10 mil combinações, fazer verificação simplificada
+      return true;
+    }
+  
+    // Verificação normal para os primeiros 10 mil exemplos
+    const hash = this.generateParamsHash(params);
     if (this.usedCombinations.has(hash)) {
       return false;
     }
@@ -256,12 +233,87 @@ class ExampleGenerator {
     return true;
   }
 
+  // IMPORTANTE: Modificado para trabalhar com a distribuição de número de parâmetros
+  generateValidParams() {
+    let attempts = 0;
+    const maxAttempts = 20;
+    
+    while (attempts < maxAttempts) {
+      const params = {};
+      
+      // Decidir quantos parâmetros incluir usando a distribuição em WEIGHTS.paramCount
+      const paramCountRandom = Math.random();
+      let targetParamCount = 1; // Valor padrão
+      let cumulativeProb = 0;
+      
+      for (const [count, prob] of Object.entries(WEIGHTS.paramCount)) {
+        cumulativeProb += prob;
+        if (paramCountRandom <= cumulativeProb) {
+          targetParamCount = parseInt(count);
+          break;
+        }
+      }
+      
+      // Gerar parâmetros com base no número alvo
+      // Lista de todos os parâmetros possíveis
+      const allParams = [
+        'keyword', 'scale', 'productType', 'state', 'city', 
+        'supplyArea', 'project', 'publicationPeriod', 'creationPeriod', 
+        'sortField', 'sortDirection', 'limit'
+      ];
+      
+      // Embaralhar a lista para seleção aleatória
+      const shuffledParams = [...allParams].sort(() => Math.random() - 0.5);
+      
+      // Selecionar o número alvo de parâmetros 
+      const selectedParams = shuffledParams.slice(0, targetParamCount);
+      
+      // Gerar valores para os parâmetros selecionados
+      for (const param of selectedParams) {
+        // Gerar valores especiais para city e state para garantir consistência
+        if (param === 'state' || param === 'city') {
+          // Se state ou city estiver selecionado, gerar ambos juntos
+          if (!params.location) {
+            const location = generateLocation(false);
+            // Corrigido: Inicializar o objeto location completamente
+            params.location = {
+              state: location.state,
+              city: location.city
+            };
+          }
+        } 
+        // Gerar valores especiais para sortField e sortDirection
+        else if (param === 'sortField' || param === 'sortDirection') {
+          // Se um está selecionado, incluir ambos
+          if (!params.sortField) params.sortField = randomChoice(SORT_FIELDS);
+          if (!params.sortDirection) params.sortDirection = randomChoice(SORT_DIRECTIONS);
+        }
+        // Gerar valor para outros parâmetros
+        else {
+          const value = this.generateParamValue(param);
+          if (value !== null) params[param] = value;
+        }
+      }
+
+      // Verificar se tem pelo menos um parâmetro
+      if (Object.keys(params).length > 0 && this.isValidCombination(params)) {
+        return params;
+      }
+
+      attempts++;
+    }
+
+    // Após muitas tentativas, criar um exemplo simples
+    return {
+      productType: randomChoice(PRODUCT_TYPES),
+      scale: randomChoice(SCALES)
+    };
+  }
+
   generateParamValue(field) {
     switch (field) {
       case 'keyword': {
-        const id = this.generateIdentifier(false);
-        // Return only the value, not the type/value object
-        return id ? id.value : null;
+        return this.generateIdentifier(false);
       }
       case 'scale':
         return randomChoice(SCALES);
@@ -290,295 +342,177 @@ class ExampleGenerator {
     }
   }
 
-  generateValidParams() {
-    let attempts = 0;
-    const maxAttempts = 10;
+  weightedChoice(weights) {
+    const total = Object.values(weights).reduce((a, b) => a + b, 0);
+    let random = Math.random() * total;
     
-    while (attempts < maxAttempts) {
-      const params = {};
-      const groupProbability = {};
-      
-      // Initialize group probabilities
-      Object.keys(PARAM_GROUPS).forEach(group => {
-        groupProbability[group] = Math.random();
-      });
-
-      // Must have at least one primary parameter
-      const primaryGroups = ['identifier', 'location', 'metadata'];
-      const hasPrimary = primaryGroups.some(group => groupProbability[group] < WEIGHTS.primaryGroup);
-      
-      if (!hasPrimary) {
-        const randomPrimary = randomChoice(primaryGroups);
-        groupProbability[randomPrimary] = 0; // Force inclusion
-      }
-
-      // Generate parameters based on group probabilities
-      Object.entries(PARAM_GROUPS).forEach(([group, fields]) => {
-        if (groupProbability[group] < calculateGroupDecay(params)) {
-          fields.forEach(field => {
-            if (shouldInclude(WEIGHTS[field])) {
-              const value = this.generateParamValue(field);
-              if (value) params[field] = value;
-            }
-          });
-        }
-      });
-
-      // Validate the generated parameters
-      if (this.isValidCombination(params) && Object.keys(params).length > 0) {
-        return params;
-      }
-
-      attempts++;
+    for (const [item, weight] of Object.entries(weights)) {
+      random -= weight;
+      if (random <= 0) return item;
     }
-
-    return null;
+    
+    return Object.keys(weights)[0];
   }
 
-  generateQuery(params) {
-    const queryParts = [];
-    const usedParams = {};
-
-    // Função auxiliar para adicionar parte à query
-    function addToParts(text, paramType, value) {
-      if (text && text.trim()) {
-        queryParts.push(text.trim());
-        if (paramType) usedParams[paramType] = value;
-      }
-    }
-
-    // Formato da query
-    const isQuestion = Math.random() > 0.7;
-    
-    if (!isQuestion && this.shouldInclude(0.7)) {
-      addToParts(this.randomChoice(QUERY_FORMATS.prefixes));
-    }
-
-    // Identificador
-    if (params.identifier) {
-      addToParts(`${params.identifier.type} ${params.identifier.value}`, 'identifier', params.identifier);
-    }
-
-    // Tipo de produto
-    if (params.productType) {
-      addToParts(params.productType, 'productType', params.productType);
-    }
-
-    // Escala
-    if (params.scale) {
-      addToParts(`na escala ${params.scale}`, 'scale', params.scale);
-    }
-
-    // Localização
-    if (params.location) {
-      const locationParts = [];
-      if (params.location.city) {
-        locationParts.push(`em ${params.location.city}`);
-        usedParams.city = params.location.city;
-      }
-      if (params.location.state) {
-        locationParts.push(`no ${params.location.state.name}`);
-        usedParams.state = params.location.state.name;
-      }
-      if (locationParts.length > 0) {
-        addToParts(locationParts.join(' '));
-      }
-    }
-
-    // Centro de Geoinformação
-    if (params.supplyArea) {
-      addToParts(`do ${params.supplyArea}`, 'supplyArea', params.supplyArea);
-    }
-
-    // Projeto
-    if (params.project) {
-      addToParts(`do projeto ${params.project}`, 'project', params.project);
-    }
-
-    // Datas
-    if (params.publicationPeriod) {
-      addToParts(
-        `publicado entre ${params.publicationPeriod.start} e ${params.publicationPeriod.end}`,
-        'publicationPeriod',
-        params.publicationPeriod
-      );
-    } else if (params.creationPeriod) {
-      addToParts(
-        `criado entre ${params.creationPeriod.start} e ${params.creationPeriod.end}`,
-        'creationPeriod',
-        params.creationPeriod
-      );
-    }
-
-    // Ordenação
-    if (params.sortField) {
-      const sortText = params.sortDirection === 'ASC' ? 'mais antigas' : 'mais recentes';
-      addToParts(sortText, 'sort', { field: params.sortField, direction: params.sortDirection });
-    }
-
-    // Limite
-    if (params.limit) {
-      addToParts(`mostrar ${params.limit} resultados`, 'limit', params.limit);
-    }
-
-    let query = queryParts.join(' ').trim();
-
-    if (isQuestion) {
-      query = `${query}?`;
-    } else if (this.shouldInclude(0.2)) {
-      query += ` ${this.randomChoice(QUERY_FORMATS.suffixes)}`;
-    }
-
-    // Aplicar typos se necessário
-    if (this.shouldInclude(WEIGHTS.typo)) {
-      query = this.generateTypos(query);
-    }
-
-    return { query, usedParams };
-  }
-
-  generateTypos(text) {
-    if (!text) return text;
-    
-    const words = text.split(' ');
-    const numTypos = Math.floor(Math.random() * 2) + 1;
-    
-    for (let i = 0; i < numTypos; i++) {
-      const wordIndex = Math.floor(Math.random() * words.length);
-      const word = words[wordIndex];
-      
-      const typoType = Math.random();
-      if (typoType < 0.3) {
-        // Troca de letras
-        const charIndex = Math.floor(Math.random() * (word.length - 1));
-        const chars = [...word];
-        [chars[charIndex], chars[charIndex + 1]] = [chars[charIndex + 1], chars[charIndex]];
-        words[wordIndex] = chars.join('');
-      } else if (typoType < 0.6) {
-        // Letra duplicada
-        const charIndex = Math.floor(Math.random() * word.length);
-        words[wordIndex] = word.slice(0, charIndex) + word[charIndex] + word.slice(charIndex);
-      } else {
-        // Letra faltando
-        const charIndex = Math.floor(Math.random() * word.length);
-        words[wordIndex] = word.slice(0, charIndex) + word.slice(charIndex + 1);
-      }
-    }
-    
-    return words.join(' ');
-  }
-
+  // Melhorado para evitar redundâncias
   generateReasoning(params, invalidElements = [], usedVariations = []) {
-    const parts = [];
-  
-    // 1. Process identifier/keyword
+    // Organizar variações por forma canônica para fácil consulta
+    const variationsByParam = {};
+    usedVariations.forEach(variation => {
+      const key = variation.type.toLowerCase();
+      if (!variationsByParam[key]) {
+        variationsByParam[key] = {};
+      }
+      variationsByParam[key][variation.canonical] = variation.used;
+    });
+    
+    // Lista para passos de raciocínio
+    const reasoningSteps = [];
+    
+    // Começar com uma introdução
+    reasoningSteps.push("Analisando a consulta para identificar os parâmetros de busca");
+    
+    // Processar keyword/identifier
     if (params.keyword) {
-      // Check for MI/INOM pattern
-        parts.push(`Found map identifier "${params.keyword}"`);
-    }
-  
-    // 2. Process product type with special cases
-    if (params.productType) {
-        parts.push(`Product type specified: '${params.productType}'`);
-    }
-  
-    // 3. Process scale with context
-    if (params.scale) {
-      parts.push(`Scale '${params.scale}' selected`);
-    }
-  
-    // 4. Process location (state/city)
-    if (params.state) {
-      parts.push(`State location: "${params.state}"`);
-    }
-    if (params.city) {
-      if (params.state) {
-        parts.push(`City location: "${params.city}" in ${params.state}`);
+      const productTypeVariations = variationsByParam.product_type || {};
+      if (variationsByParam.keyword && variationsByParam.keyword[params.keyword]) {
+        reasoningSteps.push(`Identifico "${variationsByParam.keyword[params.keyword]}" como uma referência ao identificador "${params.keyword}"`);
       } else {
-        parts.push(`City location: "${params.city}"`);
+        reasoningSteps.push(`A consulta menciona o identificador "${params.keyword}"`);
       }
     }
-  
-    // 5. Process supply area with full name
+    
+    // Processar tipo de produto
+    if (params.productType) {
+      if (variationsByParam.product_type && variationsByParam.product_type[params.productType]) {
+        reasoningSteps.push(`O termo "${variationsByParam.product_type[params.productType]}" se refere ao tipo de produto "${params.productType}"`);
+      } else {
+        reasoningSteps.push(`O tipo de produto solicitado é "${params.productType}"`);
+      }
+    }
+    
+    // Processar escala
+    if (params.scale) {
+      if (variationsByParam.scale && variationsByParam.scale[params.scale]) {
+        reasoningSteps.push(`A expressão "${variationsByParam.scale[params.scale]}" indica a escala ${params.scale}`);
+      } else {
+        reasoningSteps.push(`A escala especificada é "${params.scale}"`);
+      }
+    }
+    
+    // Processar localização (estado/cidade)
+    if (params.location) {
+      if (params.location.state && params.location.city) {
+        const stateName = params.location.state.name;
+        const cityName = params.location.city;
+        reasoningSteps.push(`A localização é na cidade de "${cityName}" no estado de "${stateName}"`);
+      } else if (params.location.state) {
+        const stateName = params.location.state.name;
+        reasoningSteps.push(`A localização é no estado de "${stateName}"`);
+      } else if (params.location.city) {
+        reasoningSteps.push(`A localização é na cidade de "${params.location.city}"`);
+      }
+    }
+    
+    // Processar área de fornecimento
     if (params.supplyArea) {
-      const cgeoNumber = params.supplyArea.charAt(0);
-      parts.push(`Supply area identified as ${params.supplyArea} (${cgeoNumber}° CGEO)`);
+      if (variationsByParam.supply_area && variationsByParam.supply_area[params.supplyArea]) {
+        reasoningSteps.push(`"${variationsByParam.supply_area[params.supplyArea]}" se refere à área de fornecimento "${params.supplyArea}"`);
+      } else {
+        reasoningSteps.push(`A área de fornecimento identificada é "${params.supplyArea}"`);
+      }
     }
-  
-    // 6. Process project with context
+    
+    // Processar projeto
     if (params.project) {
-        parts.push(`Project specified: '${params.project}'`);
+      if (variationsByParam.project && variationsByParam.project[params.project]) {
+        reasoningSteps.push(`A referência "${variationsByParam.project[params.project]}" é para o projeto "${params.project}"`);
+      } else {
+        reasoningSteps.push(`O projeto especificado é "${params.project}"`);
+      }
     }
-  
-    // 7. Process date ranges
+    
+    // Processar intervalos de data
     if (params.publicationPeriod) {
-      parts.push(
-        `Publication period from ${params.publicationPeriod.start} to ${params.publicationPeriod.end}`
-      );
+      const period = params.publicationPeriod;
+      if (period.description) {
+        reasoningSteps.push(`A expressão "${period.description}" indica um período de publicação de ${period.start} até ${period.end}`);
+      } else {
+        reasoningSteps.push(`O período de publicação é de ${period.start} até ${period.end}`);
+      }
     }
+    
     if (params.creationPeriod) {
-      parts.push(
-        `Creation period from ${params.creationPeriod.start} to ${params.creationPeriod.end}`
-      );
+      const period = params.creationPeriod;
+      if (period.description) {
+        reasoningSteps.push(`O termo "${period.description}" se refere a um período de criação de ${period.start} até ${period.end}`);
+      } else {
+        reasoningSteps.push(`O período de criação é de ${period.start} até ${period.end}`);
+      }
     }
-  
-    // 8. Process sorting parameters
+    
+    // Processar parâmetros de ordenação
     if (params.sortField) {
       const sortTypes = {
-        publicationDate: 'publication date',
-        creationDate: 'creation date'
+        publicationDate: 'data de publicação',
+        creationDate: 'data de criação'
       };
       const directions = {
-        ASC: 'oldest first',
-        DESC: 'newest first'
+        ASC: 'mais antigas primeiro',
+        DESC: 'mais recentes primeiro'
       };
-      parts.push(
-        `Results ordered by ${sortTypes[params.sortField]}, ${directions[params.sortDirection]}`
-      );
+      
+      const fieldType = sortTypes[params.sortField] || params.sortField;
+      const direction = directions[params.sortDirection] || params.sortDirection;
+      
+      reasoningSteps.push(`Os resultados devem ser ordenados por ${fieldType}, ${direction}`);
     }
-  
-    // 9. Process limit
+    
+    // Processar limite
     if (params.limit) {
-      parts.push(`Results limited to ${params.limit} items`);
+      reasoningSteps.push(`A consulta solicita limitar os resultados a ${params.limit} itens`);
     }
-  
-    // 10. Process variations using getReasoningText
-    usedVariations.forEach(variation => {
-      const reasoningText = getReasoningText(
-        variation.type,
-        variation.used,
-        variation.canonical
-      );
-      if (reasoningText) {
-        parts.push(reasoningText);
+    
+    // Processar elementos inválidos
+    invalidElements.forEach(invalid => {
+      switch(invalid.type) {
+        case 'scale':
+          reasoningSteps.push(`"${invalid.value}" parece ser uma referência de escala, mas é inválida - ignorando`);
+          break;
+        case 'keyword':
+          reasoningSteps.push(`"${invalid.value}" parece um identificador de mapa, mas tem formato inválido - ignorando`);
+          break;
+        case 'location':
+          reasoningSteps.push(`"${invalid.value}" parece uma referência de localização, mas não é reconhecida - ignorando`);
+          break;
+        case 'date':
+          reasoningSteps.push(`A especificação de data "${invalid.value}" é inválida ou fora do intervalo - ignorando`);
+          break;
+        case 'supplyArea':
+          reasoningSteps.push(`"${invalid.value}" parece referir-se a uma área de fornecimento, mas não é válida - ignorando`);
+          break;
+        case 'limit':
+          reasoningSteps.push(`O valor de limite "${invalid.value}" é inválido (deve ser um número positivo) - ignorando`);
+          break;
+        default:
+          reasoningSteps.push(`Ignorando ${invalid.type} inválido: "${invalid.value}"`);
       }
     });
-  
-    // 11. Process invalid elements
-    invalidElements.forEach(invalid => {
-      const contextMap = {
-        scale: 'invalid scale format',
-        identifier: 'invalid identifier format',
-        supplyArea: 'invalid supply area reference',
-        date: 'invalid date specification',
-        location: 'invalid location reference'
-      };
-      const context = contextMap[invalid.type] || invalid.reason;
-      parts.push(`Ignored ${context}: "${invalid.value}"`);
-    });
-  
-    // Handle empty parameters case
-    if (parts.length === 0) {
-      parts.push('No valid search parameters identified in query');
+    
+    // Finalizar com uma conclusão
+    if (Object.keys(params).length === 0 && invalidElements.length === 0) {
+      reasoningSteps.push("Não consegui identificar nenhum parâmetro de busca válido nesta consulta");
+    } else {
+      reasoningSteps.push("Estes são todos os parâmetros que pude extrair da consulta");
     }
-  
-    // Return complete reasoning with proper punctuation
-    return parts.join('. ') + '.';
+    
+    // Unir todos os passos com pontuação adequada
+    return reasoningSteps.join(". ");
   }
 
   generateExample(includeInvalid = false) {
     let attempt = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 20;
   
     while (attempt < maxAttempts) {
       const validParams = this.generateValidParams();
@@ -597,44 +531,157 @@ class ExampleGenerator {
         invalidElements = invalid.invalidElements;
       }
 
-      const { query, usedParams } = generateQuery(queryParams);
+      const result = generateQuery(queryParams);
+      const query = result.query;
+      const usedParams = result.usedParams;
+      const usedVariations = result.usedVariations;
   
-      // Validate query content
-      if (!query || query.trim().length < 10 || 
-          query.length > 200 || 
-          query.includes('undefined') || 
-          this.usedQueries.has(query) ||
-          Object.keys(usedParams).length === 0) {
-        attempt++;
-        continue;
-      }
-  
-      this.usedQueries.add(query);
-  
-      const reasoning = this.generateReasoning(usedParams, invalidElements);
+      // Validação mais relaxada para permitir maior variabilidade
+      const isQueryValid = (
+        query && 
+        query.trim().length >= 10 && 
+        query.length <= 300 && 
+        !query.includes('undefined') && 
+        Object.keys(usedParams).length > 0
+      );
       
-      // Format answer according to backend expectations
-      const answer = {
-        reasoning,
-      };
+      // Verificação simplificada de duplicidade
+      let isDuplicate = false;
+      
+      // Para os primeiros 5K exemplos, verificar duplicados exatos
+      if (this.usedQueries.size < 5000) {
+        isDuplicate = this.usedQueries.has(query);
+      } else {
+        // Após 5K exemplos, não verificar duplicados
+        isDuplicate = false;
+      }
+
+      if (isQueryValid && !isDuplicate) {
+        this.usedQueries.add(query);
   
-      // Add valid parameters to answer with correct format
-      Object.entries(usedParams).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          // Special handling for location
-          if (key === 'location') {
-            if (value.state) answer.state = value.state;
-            if (value.city) answer.city = value.city;
-          } else {
-            answer[key] = value;
+        const reasoning = this.generateReasoning(usedParams, invalidElements, usedVariations);
+        
+        // CORREÇÃO: Construir resposta no formato correto conforme o esquema especificado
+        const answer = {
+          reasoning: reasoning,
+          keyword: null,
+          scale: null,
+          productType: null, 
+          state: null,
+          city: null,
+          supplyArea: null,
+          project: null,
+          publicationPeriod: null,
+          creationPeriod: null,
+          sortField: null,
+          sortDirection: null,
+          limit: null
+        };
+  
+        // Add valid parameters to answer with correct format
+        Object.entries(usedParams).forEach(([key, value]) => {
+          if (value !== undefined && value !== null) {
+            // Special handling for location
+            if (key === 'location') {
+              if (value.state) answer.state = value.state.name;
+              if (value.city) answer.city = value.city;
+            } else if (key === 'publicationPeriod' || key === 'creationPeriod') {
+              // Incluir apenas start e end
+              answer[key] = {
+                start: value.start,
+                end: value.end
+              };
+            }
+            else {
+              answer[key] = value;
+            }
           }
+        });
+        
+        // Armazenar o par query/answer para expansão posterior
+        const examplePair = { 
+          query, 
+          answer,
+          structure: result.structure
+        };
+        
+        // Limitando o tamanho para economizar memória
+        if (this.successfulQueries.length < 5000) {
+          this.successfulQueries.push(examplePair);
+        } else {
+          // Substituir aleatoriamente um exemplo existente
+          const idx = Math.floor(Math.random() * this.successfulQueries.length);
+          this.successfulQueries[idx] = examplePair;
         }
-      });
   
-      return { query, answer };
+        // CORREÇÃO: Retornar o par, não apenas um dos elementos
+        return {
+          query,
+          answer: { ...answer }  // Clone para evitar referências
+        };
+      }
+
+      attempt++;
     }
   
-    return null;
+    // Exemplo simples como último recurso
+    const answer = {
+      reasoning: `Product type specified: '${randomChoice(PRODUCT_TYPES)}'. Scale '${randomChoice(SCALES)}' selected.`,
+      keyword: null,
+      scale: randomChoice(SCALES),
+      productType: randomChoice(PRODUCT_TYPES), 
+      state: null,
+      city: null,
+      supplyArea: null,
+      project: null,
+      publicationPeriod: null,
+      creationPeriod: null,
+      sortField: null,
+      sortDirection: null,
+      limit: null
+    };
+
+    return {
+      query: `Preciso de ${answer.productType} na escala ${answer.scale}`,
+      answer
+    };
+  }
+  
+  // Usando expandQueryVariations para criar variações
+  expandSuccessfulExamples(numberOfExpansions = 3) {
+    if (this.successfulQueries.length === 0) return [];
+    
+    const expansions = [];
+    
+    // Seleciona vários exemplos base diferentes para maior variedade
+    for (let i = 0; i < numberOfExpansions; i++) {
+      // Escolher um exemplo base aleatório
+      const baseIndex = Math.floor(Math.random() * this.successfulQueries.length);
+      const baseExample = this.successfulQueries[baseIndex];
+      
+      // Usar expandQueryVariations para criar várias variações
+      const variations = expandQueryVariations(baseExample, 2);
+      
+      for (const variation of variations) {
+        if (variation.query && 
+            variation.query.length >= 10 && 
+            variation.query.length <= 300) {
+          
+          // Verificação simplificada para aceitar mais variações
+          if (!this.usedQueries.has(variation.query)) {
+            this.usedQueries.add(variation.query);
+            
+            // CORREÇÃO: Precisamos criar novas expansões com a mesma resposta
+            expansions.push({
+              query: variation.query,
+              answer: { ...baseExample.answer }  // Clone profundo para evitar referências
+            });
+          }
+        }
+      }
+    }
+    
+    return expansions;
   }
 
   generateDataset(size, invalidRatio = 0.1) {
@@ -642,52 +689,124 @@ class ExampleGenerator {
     const totalInvalid = Math.floor(size * invalidRatio);
     const totalValid = size - totalInvalid;
     
+    // Configuração para expansões
+    const expansionRatio = 0.6; // 60% de exemplos são expansões
+    const expansionsPerExample = 10; 
+    
+    // Calcular metas para gerações diretas vs. expansões
+    const directGenerationTarget = Math.floor(totalValid * (1 - expansionRatio));
+    const expansionTarget = totalValid - directGenerationTarget;
+    
     // Safety limits
-    const maxAttemptsPerExample = 10;
-    const maxTotalAttempts = size * maxAttemptsPerExample;
+    const maxTotalAttempts = size * 10;
     let totalAttempts = 0;
     
     console.log(`\nStarting dataset generation:`);
     console.log(`- Target total examples: ${size}`);
     console.log(`- Valid examples: ${totalValid}`);
+    console.log(`- Direct generation target: ${directGenerationTarget}`);
+    console.log(`- Expansion target: ${expansionTarget}`);
     console.log(`- Invalid examples: ${totalInvalid}`);
 
-    // Generate valid examples
-    while (dataset.length < totalValid && totalAttempts < maxTotalAttempts) {
+    // Gerar exemplos válidos diretamente
+    let validCount = 0;
+    while (validCount < directGenerationTarget && totalAttempts < maxTotalAttempts) {
       const example = this.generateExample(false);
       totalAttempts++;
       
       if (example && example.query.trim().length > 0) {
+        // CORREÇÃO: Adicionar apenas o par query/answer no dataset
         dataset.push(example);
-        if (dataset.length % 100 === 0) {
-          console.log(`Generated ${dataset.length}/${size} examples (attempts: ${totalAttempts})`);
+        validCount++;
+        
+        if (validCount % 100 === 0) {
+          console.log(`Generated ${validCount}/${directGenerationTarget} direct valid examples (attempts: ${totalAttempts})`);
+        }
+        
+        // A cada N exemplos, gerar expansões com base nos já existentes
+        if (validCount % 500 === 0 && this.successfulQueries.length > 0) {
+          const expansions = this.expandSuccessfulExamples(20);
+          // Adicionar apenas a quantidade necessária de expansões
+          const expansionsToAdd = Math.min(expansions.length, 1000);
+          for (let i = 0; i < expansionsToAdd; i++) {
+            dataset.push(expansions[i]);
+            validCount++;
+            
+            if (validCount >= directGenerationTarget) break;
+          }
+          console.log(`Added ${expansionsToAdd} expansions, now at ${validCount}/${directGenerationTarget} examples`);
         }
       }
     }
+    
+    // Gerar mais expansões para atingir o alvo
+    if (validCount < totalValid && this.successfulQueries.length > 0) {
+      console.log(`\nGenerating more expansions to reach target of ${totalValid} valid examples`);
+      
+      // Calcular quantas expansões ainda precisamos
+      const remainingExpansions = totalValid - validCount;
+      const batchSize = 1000; // Quantidade para processar de cada vez
+      let expansionsMade = 0;
+      
+      while (expansionsMade < remainingExpansions) {
+        const currentBatch = Math.min(batchSize, remainingExpansions - expansionsMade);
+        console.log(`Generating batch of ${currentBatch} expansions...`);
+        
+        // Gerar uma grande quantidade de expansões
+        const expansions = this.expandSuccessfulExamples(currentBatch / 2); // 2 expansões por exemplo
+        
+        const expansionsToAdd = Math.min(expansions.length, currentBatch);
+        for (let i = 0; i < expansionsToAdd; i++) {
+          dataset.push(expansions[i]);
+          expansionsMade++;
+        }
+        
+        console.log(`Added ${expansionsToAdd} expansions, total valid examples: ${validCount + expansionsMade}/${totalValid}`);
+        
+        // Se não conseguimos gerar expansões suficientes, usar exemplos diretamente gerados
+        if (expansionsToAdd < currentBatch) {
+          const remaining = currentBatch - expansionsToAdd;
+          console.log(`Need ${remaining} more examples, generating directly...`);
+          
+          for (let i = 0; i < remaining; i++) {
+            const example = this.generateExample(false);
+            if (example && example.query.trim().length > 0) {
+              dataset.push(example);
+              expansionsMade++;
+            }
+          }
+        }
+      }
+      
+      validCount += expansionsMade;
+      console.log(`Completed expansion phase, now at ${validCount}/${totalValid} valid examples`);
+    }
 
-    // Generate invalid examples
-    while (dataset.length < size && totalAttempts < maxTotalAttempts) {
+    // Gerar exemplos inválidos
+    let invalidCount = 0;
+    while (invalidCount < totalInvalid && totalAttempts < maxTotalAttempts) {
       const example = this.generateExample(true);
       totalAttempts++;
       
       if (example && example.query.trim().length > 0) {
         dataset.push(example);
-        if (dataset.length % 100 === 0) {
-          console.log(`Generated ${dataset.length}/${size} examples (attempts: ${totalAttempts})`);
+        invalidCount++;
+        
+        if (invalidCount % 100 === 0) {
+          console.log(`Generated ${invalidCount}/${totalInvalid} invalid examples (attempts: ${totalAttempts})`);
         }
       }
     }
 
     // Report generation results
     console.log(`\nGeneration complete:`);
-    console.log(`- Generated examples: ${dataset.length}/${size}`);
+    console.log(`- Valid examples: ${validCount}/${totalValid}`);
+    console.log(`- Invalid examples: ${invalidCount}/${totalInvalid}`);
+    console.log(`- Total examples: ${dataset.length}/${size}`);
     console.log(`- Total attempts: ${totalAttempts}`);
     console.log(`- Success rate: ${((dataset.length/totalAttempts) * 100).toFixed(1)}%`);
 
-    if (dataset.length < size) {
-      console.log(`\nWarning: Could only generate ${dataset.length} examples out of ${size} requested`);
-    }
-
+    // Embaralhar dataset para misturar exemplos diretos, expansões e inválidos
     return dataset.sort(() => Math.random() - 0.5);
   }
 }

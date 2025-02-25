@@ -3,7 +3,8 @@ import {
 } from './types.js';
 import {
   randomChoice, shouldInclude, generateTypos,
-  getVariation
+  getVariation, addParameterConnector, addSemanticNoise,
+  applyFormalityShift, addQueryContext, randomInt
 } from './utils.js';
 
 function generateQueryStructure() {
@@ -40,8 +41,52 @@ function generateQueryStructure() {
           type: 'statement'
         };
       }
+    },
+    // Nova opção: Multi-sentence (10% chance retirada de cada um dos anteriores)
+    {
+      weight: 0.1,
+      generate: (params) => {
+        const template = randomChoice(QUERY_FORMATS.multiSentence);
+        return {
+          template,
+          type: 'multiSentence'
+        };
+      }
+    },
+    // Nova opção: Contextual format (10% chance retirada de cada um dos anteriores)
+    {
+      weight: 0.1,
+      generate: (params) => {
+        const localRef = randomChoice([
+          'região amazônica', 'região nordeste', 'região central',
+          'litoral', 'zona de fronteira', 'área urbana',
+          'área de conservação', 'região metropolitana', 'serra'
+        ]);
+        const template = randomChoice(QUERY_FORMATS.contextualFormats).replace('{localRef}', localRef);
+        return {
+          template,
+          type: 'contextual'
+        };
+      }
+    },
+    // Nova opção: List format (10% chance retirada de cada um dos anteriores)
+    {
+      weight: 0.1,
+      generate: (params) => {
+        const template = randomChoice(QUERY_FORMATS.listFormats);
+        return {
+          template,
+          type: 'list'
+        };
+      }
     }
   ];
+
+  // Normaliza os pesos para garantir que somem 1.0
+  const totalWeight = structures.reduce((sum, structure) => sum + structure.weight, 0);
+  structures.forEach(structure => {
+    structure.weight = structure.weight / totalWeight;
+  });
 
   let random = Math.random();
   for (const structure of structures) {
@@ -54,7 +99,7 @@ function generateQueryStructure() {
 
 function generateParamOrder(params, queryType) {
   const orders = {
-    identifier: 1,
+    keyword: 1,
     productType: 2,
     scale: 3,
     location: 4,
@@ -67,7 +112,7 @@ function generateParamOrder(params, queryType) {
 
   // Group parameters by type
   const groups = {
-    identifier: params.identifier ? [`${params.identifier.type} ${params.identifier.value}`] : [],
+    keyword: params.keyword ? [params.keyword] : [],
     productType: params.productType ? [params.productType] : [],
     scale: params.scale ? [`na escala ${params.scale}`] : [],
     location: [],
@@ -91,11 +136,11 @@ function generateParamOrder(params, queryType) {
   // Handle dates group
   if (params.publicationPeriod) {
     groups.dates.push(
-      `publicado entre ${params.publicationPeriod.start} e ${params.publicationPeriod.end}`
+      `publicado ${params.publicationPeriod.description}`
     );
   } else if (params.creationPeriod) {
     groups.dates.push(
-      `criado entre ${params.creationPeriod.start} e ${params.creationPeriod.end}`
+      `criado ${params.creationPeriod.description}`
     );
   }
 
@@ -112,28 +157,39 @@ function generateParamOrder(params, queryType) {
     .map(([_, items]) => items);
 
   // Randomize order slightly within constraints
-  if (shouldInclude(0.3)) {
-    // 30% chance to swap some adjacent groups
+  if (shouldInclude(0.5)) { // Increased chance (from 0.3 to 0.5) to swap parameters for more variety
+    // Potentially swap multiple adjacent groups
     for (let i = 1; i < orderedGroups.length; i++) {
-      if (shouldInclude(0.3)) {
+      if (shouldInclude(0.4)) { // Increased chance (from 0.3 to 0.4)
         [orderedGroups[i-1], orderedGroups[i]] = [orderedGroups[i], orderedGroups[i-1]];
       }
     }
+    
+    // Occasionally do a more radical reordering
+    if (shouldInclude(0.2) && orderedGroups.length >= 3) {
+      const pos1 = randomInt(0, orderedGroups.length - 1);
+      let pos2 = randomInt(0, orderedGroups.length - 1);
+      // Make sure pos2 is different from pos1
+      while (pos2 === pos1) {
+        pos2 = randomInt(0, orderedGroups.length - 1);
+      }
+      [orderedGroups[pos1], orderedGroups[pos2]] = [orderedGroups[pos2], orderedGroups[pos1]];
+    }
   }
 
-  return orderedGroups.flat();
+  // Flatten groups
+  let flatParams = orderedGroups.flat();
+  
+  // CORREÇÃO: Utilizar addParameterConnector para adicionar conectores entre parâmetros
+  if (shouldInclude(0.4) && flatParams.length >= 2) {
+    flatParams = addParameterConnector(flatParams);
+  }
+
+  return flatParams;
 }
 
 function generateVariations(params, queryType) {
   const variations = [];
-  
-  if (params.identifier && shouldInclude(WEIGHTS.withoutPrefix)) {
-    variations.push({
-      type: 'IDENTIFIER',
-      canonical: `${params.identifier.type} ${params.identifier.value}`,
-      used: params.identifier.value
-    });
-  }
 
   Object.entries(params).forEach(([key, value]) => {
     if (!value) return;
@@ -145,7 +201,7 @@ function generateVariations(params, queryType) {
       project: 'PROJECT'
     }[key];
 
-    if (variationType && shouldInclude(0.4)) {
+    if (variationType && shouldInclude(0.6)) { // Increased chance from 0.4 to 0.6 for more variation
       const variation = getVariation(variationType, value);
       if (variation !== value) {
         variations.push({
@@ -180,8 +236,23 @@ export function generateQuery(params) {
   let query = structure.template.replace('{params}', queryText);
 
   // Add optional suffix for non-questions
-  if (structure.type !== 'question' && shouldInclude(0.2)) {
+  if (structure.type !== 'question' && shouldInclude(0.4)) { // Increased chance from 0.2 to 0.4
     query += ` ${randomChoice(QUERY_FORMATS.suffixes)}`;
+  }
+
+  // Add semantic noise/context for more variation
+  if (shouldInclude(WEIGHTS.semanticNoise)) {
+    query = addSemanticNoise(query);
+  }
+
+  // Apply formality shifts for more variation
+  if (shouldInclude(WEIGHTS.formalityShift)) {
+    query = applyFormalityShift(query, shouldInclude(0.5));
+  }
+
+  // Add contextual information
+  if (shouldInclude(WEIGHTS.contextualInfo)) {
+    query = addQueryContext(query);
   }
 
   // Apply typos if needed
@@ -208,4 +279,149 @@ export function generateQuery(params) {
     usedVariations,
     structure: structure.type
   };
+}
+
+// Nova função: Expandir a partir de uma query bem-sucedida
+export function expandQueryVariations(originalQuery, numberOfVariations = 3) {
+  if (!originalQuery || !originalQuery.query) return [];
+  
+  const variations = [];
+  const { query, structure, usedParams } = originalQuery;
+  
+  // Diferentes tipos de expansão
+  const expansionTypes = [
+    // Typos diferentes
+    () => {
+      const typoQuery = generateTypos(query);
+      return {
+        query: typoQuery,
+        usedParams,
+        structure,
+        expansionType: 'typo'
+      };
+    },
+    
+    // Mudança de estrutura (pergunta para comando ou vice-versa)
+    () => {
+      let newQuery = query;
+      let newStructure = structure;
+      
+      if (structure === 'question') {
+        // Converter pergunta para comando
+        newQuery = query.replace(/\?$/, '');
+        const prefixes = ['preciso', 'buscar', 'localizar', 'encontrar', 'quero'];
+        newQuery = `${randomChoice(prefixes)} ${newQuery}`;
+        newStructure = 'command';
+      } else {
+        // Converter comando/statement para pergunta
+        const questions = ['onde posso encontrar', 'como faço para localizar', 'seria possível mostrar', 'existe'];
+        newQuery = `${randomChoice(questions)} ${query}?`;
+        newStructure = 'question';
+      }
+      
+      return {
+        query: newQuery,
+        usedParams,
+        structure: newStructure,
+        expansionType: 'structure'
+      };
+    },
+    
+    // Adicionar contexto
+    () => {
+      return {
+        query: addQueryContext(query),
+        usedParams,
+        structure,
+        expansionType: 'context'
+      };
+    },
+    
+    // Adicionar ruído semântico
+    () => {
+      return {
+        query: addSemanticNoise(query),
+        usedParams,
+        structure,
+        expansionType: 'semantic'
+      };
+    },
+    
+    // Mudar formalidade
+    () => {
+      return {
+        query: applyFormalityShift(query, shouldInclude(0.5)),
+        usedParams,
+        structure,
+        expansionType: 'formality'
+      };
+    },
+    
+    // Adicionar urgência ou especificação temporal
+    () => {
+      const urgencyPhrases = [
+        'urgente: ', 'com urgência: ', 'prioridade máxima: ',
+        'para hoje: ', 'necessário imediatamente: ', 'preciso para ontem: '
+      ];
+      
+      return {
+        query: `${randomChoice(urgencyPhrases)}${query}`,
+        usedParams,
+        structure,
+        expansionType: 'urgency'
+      };
+    },
+    
+    // Convertendo para formato de lista
+    () => {
+      const listFormats = [
+        `Preciso do seguinte material: 1. ${query}`,
+        `Solicito acesso aos produtos cartográficos listados: - ${query}`,
+        `Necessito dos seguintes dados para análise: item 1: ${query}`,
+        `Equipe de campo solicitou: • ${query}`
+      ];
+      
+      return {
+        query: randomChoice(listFormats),
+        usedParams,
+        structure: 'list',
+        expansionType: 'list'
+      };
+    },
+    
+    // Adicionando múltiplas frases
+    () => {
+      const introductions = [
+        'Estou trabalhando em um projeto importante. ',
+        'Somos uma equipe em campo. ',
+        'A coordenação solicitou um relatório detalhado. ',
+        'Estamos com dificuldades na área de operação. ',
+        'Olá, bom dia. ',
+        'Prezados, conforme conversado anteriormente. ',
+        'Boa tarde. Estamos com uma situação crítica em campo. ',
+        'Sou da equipe técnica do projeto X. ',
+        'Olá. Acabei de receber uma solicitação urgente. '
+      ];
+      
+      return {
+        query: `${randomChoice(introductions)}${query}`,
+        usedParams,
+        structure: 'multiSentence',
+        expansionType: 'multiSentence'
+      };
+    }
+  ];
+  
+  // Gerar o número desejado de variações
+  for (let i = 0; i < numberOfVariations; i++) {
+    const expansionFunction = randomChoice(expansionTypes);
+    const variation = expansionFunction();
+    
+    // Garantir que não haja duplicatas
+    if (!variations.some(v => v.query === variation.query)) {
+      variations.push(variation);
+    }
+  }
+  
+  return variations;
 }

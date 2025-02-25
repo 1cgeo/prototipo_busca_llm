@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Lê o arquivo de origem
-const rawData = readFileSync(join(__dirname, 'dataset_2025-02-23T02-00-38-336Z.json'), 'utf8');
+const rawData = readFileSync(join(__dirname, 'dataset_2025-02-25T00-41-04-467Z.json'), 'utf8');
 const data = JSON.parse(rawData);
 
 // Converte para o formato correto para fine-tuning

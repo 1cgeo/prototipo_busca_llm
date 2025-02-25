@@ -12,6 +12,7 @@ program
   .option('-o, --output <path>', 'output directory', 'output')
   .option('--invalid-ratio <ratio>', 'ratio of invalid examples', '0.1')
   .option('--seed <seed>', 'random seed for reproducibility')
+  .option('--expansion-ratio <ratio>', 'ratio of examples to be created by expansion vs direct generation', '0.6')
   .parse(process.argv);
 
 const opts = program.opts();
@@ -32,7 +33,25 @@ async function saveDataset(dataset) {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const filePath = path.join(opts.output, `dataset_${timestamp}.json`);
   
-  await fs.writeFile(filePath, JSON.stringify(dataset, null, 2), 'utf8');
+  // CORREÇÃO: Transformar o dataset no formato correto para treinamento
+  const cleanedData = dataset.map(example => {
+    const newExample = { ...example }; // Cria uma cópia do exemplo original para não o modificar diretamente
+  
+    // Limpa os valores nulos do dicionário 'answer'
+    if (newExample.answer) {
+      const newAnswer = {};
+      for (const key in newExample.answer) {
+        if (newExample.answer[key] !== null) {
+          newAnswer[key] = newExample.answer[key];
+        }
+      }
+      newExample.answer = newAnswer;
+    }
+  
+    return newExample;
+  });
+  
+  await fs.writeFile(filePath, JSON.stringify(cleanedData, null, 2), 'utf8');
   
   return filePath;
 }
@@ -46,6 +65,11 @@ function validateOptions(options) {
   const invalidRatio = parseFloat(options.invalidRatio);
   if (isNaN(invalidRatio) || invalidRatio < 0 || invalidRatio > 1) {
     throw new Error('Invalid ratio must be between 0 and 1');
+  }
+  
+  const expansionRatio = parseFloat(options.expansionRatio);
+  if (isNaN(expansionRatio) || expansionRatio < 0 || expansionRatio > 1) {
+    throw new Error('Expansion ratio must be between 0 and 1');
   }
 }
 
@@ -65,23 +89,23 @@ async function main() {
     }
 
     const spinner = ora('Generating training data...').start();
-
-    const dataset = await generateTrainingData(
+    
+    const rawDataset = await generateTrainingData(
       parseInt(opts.number),
       parseFloat(opts.invalidRatio)
     );
-
-    await setupOutputDir(opts.output);
-    const filePath = await saveDataset(dataset);
     
-    spinner.succeed(`Generated ${dataset.length} examples`);
+    await setupOutputDir(opts.output);
+    const filePath = await saveDataset(rawDataset);
+    
+    spinner.succeed(`Generated ${rawDataset.length} examples`);
     console.log(`\nFile saved: ${filePath}`);
 
     // Sample examples
     console.log('\nSample Examples:');
     console.log('===============');
     for (let i = 0; i < 3; i++) {
-      const example = dataset[Math.floor(Math.random() * dataset.length)];
+      const example = rawDataset[Math.floor(Math.random() * rawDataset.length)];
       console.log(`\nExample ${i + 1}:`);
       console.log(`Query: "${example.query}"`);
       console.log('Answer:', JSON.stringify(example.answer, null, 2));
